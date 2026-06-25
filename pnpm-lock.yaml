@@ -15,7 +15,7 @@ importers:
         specifier: ^5.22.0
         version: 5.22.0(prisma@5.22.0)
       fastify:
-        specifier: ^4.28.1
+        specifier: ^4.29.1
         version: 4.29.1
       pino:
         specifier: ^9.5.0

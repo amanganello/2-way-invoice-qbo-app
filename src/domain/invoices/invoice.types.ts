@@ -34,7 +34,6 @@ export type PaymentInput = Omit<Payment, "id">;
 export interface InvoiceRepository {
   findById(id: string): Promise<Invoice | null>;
   save(invoice: Invoice): Promise<Invoice>;
-  delete(id: string): Promise<void>;
 }
 
 export interface QBOInvoicePort {
