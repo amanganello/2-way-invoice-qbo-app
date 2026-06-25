@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SyncStatus {
+  SYNCED
+  PENDING
+  CONFLICT
+  ERROR
+}
+
+enum EventSource {
+  INTERNAL
+  QBO
+}
+
+enum EventStatus {
+  PENDING
+  PROCESSED
+  SKIPPED
+  FAILED
+}
+
+enum AuditResult {
+  SUCCESS
+  FAILURE
+}
+
+model SyncLink {
+  id                String     @id @default(cuid())
+  internalId        String
+  qboId             String
+  internalUpdatedAt DateTime
+  qboUpdatedAt      DateTime
+  syncStatus        SyncStatus @default(PENDING)
+  lastSyncedAt      DateTime?
+  version           Int        @default(0)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  auditLogs AuditLog[]
+
+  @@unique([internalId, qboId])
+  @@index([syncStatus])
+  @@index([internalId])
+  @@index([qboId])
+}
+
+model EventLog {
+  id          String      @id @default(cuid())
+  eventId     String      @unique
+  source      EventSource
+  eventType   String
+  payload     Json
+  receivedAt  DateTime    @default(now())
+  processedAt DateTime?
+  status      EventStatus @default(PENDING)
+
+  @@index([status])
+  @@index([source, eventType])
+}
+
+model AuditLog {
+  id            String      @id @default(cuid())
+  syncLinkId    String
+  action        String
+  sourceEventId String
+  beforeState   Json?
+  afterState    Json?
+  result        AuditResult
+  error         String?
+  createdAt     DateTime    @default(now())
+
+  syncLink SyncLink @relation(fields: [syncLinkId], references: [id])
+
+  @@index([syncLinkId])
+  @@index([sourceEventId])
+}
