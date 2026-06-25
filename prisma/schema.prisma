@@ -7,6 +7,14 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  VOID
+  OVERDUE
+}
+
 enum SyncStatus {
   SYNCED
   PENDING
@@ -29,6 +37,21 @@ enum EventStatus {
 enum AuditResult {
   SUCCESS
   FAILURE
+}
+
+model Invoice {
+  id          String        @id @default(cuid())
+  customerId  String
+  lineItems   Json
+  totalAmount Decimal       @db.Decimal(12, 2)
+  currency    String        @default("USD")
+  status      InvoiceStatus @default(DRAFT)
+  dueDate     DateTime
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([customerId])
+  @@index([status])
 }
 
 model SyncLink {
