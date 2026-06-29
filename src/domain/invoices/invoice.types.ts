@@ -5,6 +5,7 @@ export type InvoiceLineItem = {
   quantity: number;
   unitPrice: number;
   amount: number;
+  internalItemCode?: string;
 };
 
 export type Invoice = {
@@ -29,6 +30,25 @@ export type Payment = {
 
 export type PaymentInput = Omit<Payment, "id">;
 
+export type QBOSyncContext = {
+  customerRef: string;
+  itemMap: Map<string, { qboItemId: string; taxCode: string }>;
+  docNumber: string;
+  syncToken?: string;
+};
+
+export type QBOInvoiceResult = {
+  qboId: string;
+  qboSyncToken: string;
+  qboUpdatedAt: Date;
+  invoice: Invoice;
+};
+
+export type QBOPaymentResult = {
+  qboId: string;
+  qboSyncToken: string;
+};
+
 // Output ports — infrastructure must implement these
 
 export interface InvoiceRepository {
@@ -36,16 +56,37 @@ export interface InvoiceRepository {
   save(invoice: Invoice): Promise<Invoice>;
 }
 
+export interface PaymentRepository {
+  findById(id: string): Promise<Payment | null>;
+  save(payment: Payment): Promise<Payment>;
+  findByInvoiceId(invoiceId: string): Promise<Payment[]>;
+}
+
 export interface QBOInvoicePort {
-  getInvoice(id: string): Promise<Invoice>;
+  getInvoice(qboId: string): Promise<QBOInvoiceResult>;
   createInvoice(
-    data: Omit<Invoice, "id" | "createdAt" | "updatedAt">
-  ): Promise<Invoice>;
-  updateInvoice(id: string, data: Partial<Invoice>): Promise<Invoice>;
-  voidInvoice(id: string): Promise<void>;
+    invoice: Omit<Invoice, "id" | "createdAt" | "updatedAt">,
+    ctx: QBOSyncContext
+  ): Promise<QBOInvoiceResult>;
+  updateInvoice(
+    qboId: string,
+    invoice: Partial<Invoice>,
+    ctx: Required<QBOSyncContext>
+  ): Promise<QBOInvoiceResult>;
+  voidInvoice(qboId: string, syncToken: string): Promise<QBOInvoiceResult>;
+  findByDocNumber(docNumber: string): Promise<QBOInvoiceResult | null>;
 }
 
 export interface QBOPaymentPort {
-  getPayment(id: string): Promise<Payment>;
-  createPayment(data: PaymentInput): Promise<Payment>;
+  createPayment(
+    payment: PaymentInput,
+    customerRef: string,
+    qboInvoiceId: string
+  ): Promise<QBOPaymentResult>;
+  findByPaymentRefNum(refNum: string): Promise<QBOPaymentResult[]>;
+}
+
+export interface SyncQueuePort {
+  enqueueReconcile(internalId: string): Promise<void>;
+  enqueuePaymentSync(internalPaymentId: string): Promise<void>;
 }
