@@ -99,12 +99,13 @@ export const syncLinkRepository = {
     qboId: string,
     qboSyncToken: string,
     qboUpdatedAt: Date,
-    snapshot: Record<string, unknown>
-  ): Promise<SyncLinkRecord> {
+    snapshot: Record<string, unknown>,
+    version: number
+  ): Promise<void> {
     const existing = await prisma.syncLink.findUnique({ where: { internalId } });
     if (existing) {
-      const row = await prisma.syncLink.update({
-        where: { internalId },
+      const result = await prisma.syncLink.updateMany({
+        where: { id: existing.id, version },
         data: {
           qboId, qboSyncToken, qboUpdatedAt,
           lastSyncedSnapshot: JSON.parse(JSON.stringify(snapshot)),
@@ -113,9 +114,12 @@ export const syncLinkRepository = {
           version: { increment: 1 },
         },
       });
-      return toDomain(row);
+      if (result.count === 0) {
+        throw new ConflictError("Optimistic lock conflict on SyncLink in upsertLinked");
+      }
+      return;
     }
-    const row = await prisma.syncLink.create({
+    await prisma.syncLink.create({
       data: {
         internalId, qboId, qboSyncToken, qboUpdatedAt,
         internalUpdatedAt: new Date(),
@@ -124,7 +128,6 @@ export const syncLinkRepository = {
         syncStatus: "SYNCED",
       },
     });
-    return toDomain(row);
   },
 
   async findByStatuses(statuses: SyncLinkRecord["syncStatus"][]): Promise<SyncLinkRecord[]> {
