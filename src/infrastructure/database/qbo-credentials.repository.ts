@@ -1,6 +1,7 @@
 import { prisma } from "./prisma.js";
 import { encrypt, decrypt } from "@/shared/crypto/encryption.js";
 import { env } from "@/config/env.js";
+import { NotFoundError } from "@/shared/errors/app-error.js";
 
 export type QBOCredentialsData = {
   accessToken: string;
@@ -41,17 +42,15 @@ export const qboCredentialsRepository = {
 
   async updateTokens(data: QBOCredentialsData): Promise<void> {
     const existing = await prisma.qBOCredentials.findFirst();
-    if (!existing) throw new Error("No QBO credentials found to update");
-    await prisma.$transaction(async (tx) => {
-      await tx.qBOCredentials.update({
-        where: { id: existing.id },
-        data: {
-          encryptedAccessToken: encrypt(data.accessToken, env.TOKEN_ENCRYPTION_KEY),
-          encryptedRefreshToken: encrypt(data.refreshToken, env.TOKEN_ENCRYPTION_KEY),
-          expiresAt: data.expiresAt,
-          refreshTokenExpiresAt: data.refreshTokenExpiresAt,
-        },
-      });
+    if (!existing) throw new NotFoundError("No QBO credentials found to update");
+    await prisma.qBOCredentials.update({
+      where: { id: existing.id },
+      data: {
+        encryptedAccessToken: encrypt(data.accessToken, env.TOKEN_ENCRYPTION_KEY),
+        encryptedRefreshToken: encrypt(data.refreshToken, env.TOKEN_ENCRYPTION_KEY),
+        expiresAt: data.expiresAt,
+        refreshTokenExpiresAt: data.refreshTokenExpiresAt,
+      },
     });
   },
 };
