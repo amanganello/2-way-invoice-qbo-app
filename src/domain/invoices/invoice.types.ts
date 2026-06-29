@@ -79,7 +79,7 @@ export interface QBOInvoicePort {
 
 export interface QBOPaymentPort {
   createPayment(
-    payment: PaymentInput,
+    payment: Payment,
     customerRef: string,
     qboInvoiceId: string
   ): Promise<QBOPaymentResult>;

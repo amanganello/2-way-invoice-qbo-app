@@ -1,6 +1,7 @@
 import type {
   Invoice, QBOInvoicePort, QBOSyncContext, QBOInvoiceResult, InvoiceStatus,
 } from "@/domain/invoices/invoice.types.js";
+import { NotFoundError } from "@/shared/errors/app-error.js";
 import { qboClient } from "./qbo.client.js";
 import type { QBOInvoiceEntity, QBOLine } from "./qbo.types.js";
 
@@ -13,12 +14,15 @@ function buildLines(
 ): QBOLine[] {
   return lineItems.map((li) => {
     const mapping = li.internalItemCode ? itemMap.get(li.internalItemCode) : undefined;
+    if (li.internalItemCode && !mapping) {
+      throw new NotFoundError(`ItemMap missing for internal code: ${li.internalItemCode}`);
+    }
     return {
       Amount: li.amount,
       DetailType: "SalesItemLineDetail",
       Description: li.description,
       SalesItemLineDetail: {
-        ItemRef: { value: mapping?.qboItemId ?? "1" },
+        ItemRef: { value: mapping?.qboItemId ?? "ITEM_NOT_FOUND" },
         TaxCodeRef: { value: mapping?.taxCode ?? "NON" },
         Qty: li.quantity,
         UnitPrice: li.unitPrice,

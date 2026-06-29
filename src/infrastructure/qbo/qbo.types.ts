@@ -17,7 +17,7 @@ export type QBOInvoiceEntity = {
   SyncToken?: string;
   DocNumber?: string;
   CustomerRef: { value: string; name?: string };
-  Line: QBOLine[];
+  Line?: QBOLine[];
   TotalAmt?: number;
   Balance?: number;
   DueDate?: string;

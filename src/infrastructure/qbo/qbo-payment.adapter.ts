@@ -1,4 +1,4 @@
-import type { PaymentInput, QBOPaymentPort, QBOPaymentResult } from "@/domain/invoices/invoice.types.js";
+import type { Payment, QBOPaymentPort, QBOPaymentResult } from "@/domain/invoices/invoice.types.js";
 import { qboClient } from "./qbo.client.js";
 import type { QBOPaymentEntity } from "./qbo.types.js";
 
@@ -7,7 +7,7 @@ type QueryResponse = { QueryResponse: { Payment?: QBOPaymentEntity[] } };
 
 export class QBOPaymentAdapter implements QBOPaymentPort {
   async createPayment(
-    payment: PaymentInput,
+    payment: Payment,
     customerRef: string,
     qboInvoiceId: string
   ): Promise<QBOPaymentResult> {
