@@ -1,6 +1,7 @@
 import { env } from "@/config/env.js";
 import { qboCredentialsRepository } from "@/infrastructure/database/qbo-credentials.repository.js";
 import logger from "@/infrastructure/logger/index.js";
+import { ExternalServiceError, NotFoundError } from "@/shared/errors/app-error.js";
 import type { QBOFault } from "./qbo.types.js";
 
 const BASE_URLS = {
@@ -43,11 +44,11 @@ export class QBOClient {
     if ("Fault" in (json as object)) {
       const fault = json as QBOFault;
       const err = fault.Fault.Error[0];
-      throw new Error(`QBO API error [${err.code}]: ${err.Message} — ${err.Detail}`);
+      throw new ExternalServiceError(`QBO API fault: ${err.Message}`);
     }
 
     if (!response.ok) {
-      throw new Error(`QBO API HTTP ${response.status} at ${method} ${path}`);
+      throw new ExternalServiceError(`QBO API error: ${response.status}`);
     }
 
     return json as T;
@@ -63,7 +64,7 @@ export class QBOClient {
 
   private async getValidAccessToken(): Promise<string> {
     const creds = await qboCredentialsRepository.get();
-    if (!creds) throw new Error("No QBO credentials found — run scripts/qbo-auth.ts first");
+    if (!creds) throw new NotFoundError("No QBO credentials found — run scripts/qbo-auth.ts first");
 
     this.warnIfRefreshTokenExpiringSoon(creds.refreshTokenExpiresAt);
 
@@ -117,7 +118,8 @@ export class QBOClient {
         await new Promise(r => setTimeout(r, 5000));
         return this.refreshWithRetry(refreshToken, attempt + 1);
       }
-      throw err;
+      logger.error({ err, attempt }, "QBO token refresh exhausted after 3 attempts");
+      throw new ExternalServiceError("QBO token refresh failed after 3 attempts");
     }
   }
 
