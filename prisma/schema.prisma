@@ -18,6 +18,7 @@ enum InvoiceStatus {
 enum SyncStatus {
   SYNCED
   PENDING
+  PROCESSING
   CONFLICT
   ERROR
 }
@@ -50,28 +51,92 @@ model Invoice {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
+  payments Payment[]
+
   @@index([customerId])
   @@index([status])
 }
 
+model Payment {
+  id        String   @id @default(cuid())
+  invoiceId String
+  amount    Decimal  @db.Decimal(12, 2)
+  currency  String   @default("USD")
+  paidAt    DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+}
+
 model SyncLink {
-  id                String     @id @default(cuid())
-  internalId        String
-  qboId             String
-  internalUpdatedAt DateTime
-  qboUpdatedAt      DateTime
-  syncStatus        SyncStatus @default(PENDING)
-  lastSyncedAt      DateTime?
-  version           Int        @default(0)
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
+  id                  String     @id @default(cuid())
+  internalId          String     @unique
+  qboId               String?
+  internalUpdatedAt   DateTime
+  qboUpdatedAt        DateTime?
+  qboSyncToken        String?
+  lastSyncedSnapshot  Json?
+  syncStatus          SyncStatus @default(PENDING)
+  lastSyncedAt        DateTime?
+  version             Int        @default(0)
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
 
   auditLogs AuditLog[]
 
-  @@unique([internalId, qboId])
   @@index([syncStatus])
-  @@index([internalId])
   @@index([qboId])
+}
+
+model PaymentSyncLink {
+  id                String     @id @default(cuid())
+  internalId        String     @unique
+  qboId             String     @unique
+  invoiceInternalId String
+  syncStatus        SyncStatus @default(PENDING)
+  lastSyncedAt      DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  @@index([syncStatus])
+  @@index([invoiceInternalId])
+}
+
+model AccountMap {
+  id                  String   @id @default(cuid())
+  internalAccountCode String   @unique
+  qboAccountId        String
+  qboAccountName      String
+  updatedAt           DateTime @updatedAt
+}
+
+model ItemMap {
+  id               String   @id @default(cuid())
+  internalItemCode String   @unique
+  qboItemId        String
+  qboItemName      String
+  defaultTaxCode   String   @default("NON")
+  updatedAt        DateTime @updatedAt
+}
+
+model CustomerMap {
+  id                 String   @id @default(cuid())
+  internalCustomerId String   @unique
+  qboCustomerId      String
+  qboCustomerName    String
+  updatedAt          DateTime @updatedAt
+}
+
+model QBOCredentials {
+  id                      String   @id @default(cuid())
+  encryptedAccessToken    String
+  encryptedRefreshToken   String
+  expiresAt               DateTime
+  refreshTokenExpiresAt   DateTime
+  updatedAt               DateTime @updatedAt
 }
 
 model EventLog {
