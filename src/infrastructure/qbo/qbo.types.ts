@@ -5,6 +5,7 @@ export type QBOLine = {
   DetailType: "SalesItemLineDetail" | "DescriptionOnly";
   SalesItemLineDetail?: {
     ItemRef: { value: string; name?: string };
+    AccountRef?: { value: string };
     TaxCodeRef?: { value: string };
     Qty?: number;
     UnitPrice?: number;

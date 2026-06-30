@@ -10,19 +10,29 @@ type QueryResponse = { QueryResponse: { Invoice?: QBOInvoiceEntity[]; maxResults
 
 function buildLines(
   lineItems: Invoice["lineItems"],
-  itemMap: QBOSyncContext["itemMap"]
+  itemMap: QBOSyncContext["itemMap"],
+  accountMap?: QBOSyncContext["accountMap"]
 ): QBOLine[] {
   return lineItems.map((li) => {
     const mapping = li.internalItemCode ? itemMap.get(li.internalItemCode) : undefined;
     if (li.internalItemCode && !mapping) {
       throw new NotFoundError(`ItemMap missing for internal code: ${li.internalItemCode}`);
     }
+
+    const accountMapping = li.internalAccountCode
+      ? accountMap?.get(li.internalAccountCode)
+      : undefined;
+    if (li.internalAccountCode && !accountMapping) {
+      throw new NotFoundError(`AccountMap missing for code: ${li.internalAccountCode}`);
+    }
+
     return {
       Amount: li.amount,
       DetailType: "SalesItemLineDetail",
       Description: li.description,
       SalesItemLineDetail: {
         ItemRef: { value: mapping?.qboItemId ?? "ITEM_NOT_FOUND" },
+        ...(accountMapping && { AccountRef: { value: accountMapping.qboAccountId } }),
         TaxCodeRef: { value: mapping?.taxCode ?? "NON" },
         Qty: li.quantity,
         UnitPrice: li.unitPrice,
@@ -83,7 +93,7 @@ export class QBOInvoiceAdapter implements QBOInvoicePort {
     const payload: QBOInvoiceEntity = {
       CustomerRef: { value: ctx.customerRef },
       DocNumber: ctx.docNumber,
-      Line: buildLines(invoice.lineItems, ctx.itemMap),
+      Line: buildLines(invoice.lineItems, ctx.itemMap, ctx.accountMap),
       DueDate: invoice.dueDate.toISOString().split("T")[0],
       CurrencyRef: { value: invoice.currency },
     };
@@ -101,7 +111,7 @@ export class QBOInvoiceAdapter implements QBOInvoicePort {
       SyncToken: ctx.syncToken,
       CustomerRef: { value: ctx.customerRef },
       DocNumber: ctx.docNumber,
-      ...(invoice.lineItems && { Line: buildLines(invoice.lineItems, ctx.itemMap) }),
+      ...(invoice.lineItems && { Line: buildLines(invoice.lineItems, ctx.itemMap, ctx.accountMap) }),
       ...(invoice.dueDate && { DueDate: invoice.dueDate.toISOString().split("T")[0] }),
       ...(invoice.currency && { CurrencyRef: { value: invoice.currency } }),
     };

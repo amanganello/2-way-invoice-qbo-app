@@ -24,10 +24,9 @@ export type ReconcileDeps = {
   invoiceRepo: InvoiceRepository;
   syncLinkRepo: SyncLinkRepository;
   paymentSyncLinkRepo: PaymentSyncLinkPort;
-  // accountMapRepo is retained in the type for future use but is not called at runtime:
-  // QBO derives the income account from the Item record (via ItemRef), so per-line
-  // AccountMap resolution is not needed during create/update. If direct account mapping
-  // is required in a future task, wire it into buildLines in qbo-invoice.adapter.ts.
+  // accountMapRepo: used to resolve internalAccountCode → qboAccountId per line item.
+  // When a line item has internalAccountCode set, the mapped qboAccountId is included
+  // as AccountRef in the QBO line (SalesItemLineDetail). Missing entries are an error.
   accountMapRepo: { findByInternalCode: (code: string) => Promise<{ qboAccountId: string } | null> };
   itemMapRepo: { findByInternalCode: (code: string) => Promise<{ qboItemId: string; defaultTaxCode: string } | null> };
   customerMapRepo: { findByInternalId: (id: string) => Promise<{ qboCustomerId: string } | null> };
@@ -51,7 +50,7 @@ function invoiceToSnapshot(invoice: Invoice): Record<string, unknown> {
 export async function reconcileInvoice(internalId: string, deps: ReconcileDeps): Promise<void> {
   const {
     invoiceRepo, syncLinkRepo, paymentSyncLinkRepo,
-    itemMapRepo, customerMapRepo,
+    accountMapRepo, itemMapRepo, customerMapRepo,
     qboInvoicePort, auditLogRepo,
     qbDefaultCustomerId, qbEnvironment,
   } = deps;
@@ -144,7 +143,20 @@ export async function reconcileInvoice(internalId: string, deps: ReconcileDeps):
       itemMap.set(code, { qboItemId: entry.qboItemId, taxCode: entry.defaultTaxCode });
     }
 
-    const ctx: QBOSyncContext = { customerRef, itemMap, docNumber: internalId };
+    // Build accountMap for line items with internalAccountCode
+    const accountMap = new Map<string, { qboAccountId: string }>();
+    const accountCodes = [...new Set(
+      invoice.lineItems
+        .map(li => li.internalAccountCode)
+        .filter((c): c is string => Boolean(c))
+    )];
+    for (const code of accountCodes) {
+      const entry = await accountMapRepo.findByInternalCode(code);
+      if (!entry) throw new ExternalServiceError(`No AccountMap entry for code: ${code}`);
+      accountMap.set(code, { qboAccountId: entry.qboAccountId });
+    }
+
+    const ctx: QBOSyncContext = { customerRef, itemMap, accountMap, docNumber: internalId };
 
     // Partially-paid guard: only block lineItems/totalAmount changes.
     // Other fields (dueDate, currency, status) are allowed even on partially-paid invoices.

@@ -6,6 +6,7 @@ export type InvoiceLineItem = {
   unitPrice: number;
   amount: number;
   internalItemCode?: string;
+  internalAccountCode?: string;
 };
 
 export type Invoice = {
@@ -33,6 +34,7 @@ export type PaymentInput = Omit<Payment, "id">;
 export type QBOSyncContext = {
   customerRef: string;
   itemMap: Map<string, { qboItemId: string; taxCode: string }>;
+  accountMap: Map<string, { qboAccountId: string }>;
   docNumber: string;
   syncToken?: string;
 };
