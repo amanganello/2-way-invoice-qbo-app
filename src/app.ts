@@ -1,4 +1,4 @@
-import fastify, { type FastifyBaseLogger } from "fastify";
+import fastify, { type FastifyBaseLogger, type FastifyRequest } from "fastify";
 import sensible from "@fastify/sensible";
 import { ZodError } from "zod";
 import logger from "@/infrastructure/logger/index.js";
@@ -9,6 +9,25 @@ export function buildApp() {
   const app = fastify({ logger: logger as unknown as FastifyBaseLogger });
 
   app.register(sensible);
+
+  // Store raw string body for HMAC verification in webhook handler.
+  // The wildcard parser handles requests with no content-type header (e.g. webhook signature tests).
+  const storeRawAndParseJson = (
+    _req: Parameters<Parameters<typeof app.addContentTypeParser>[2]>[0],
+    body: unknown,
+    done: (err: Error | null, result?: unknown) => void,
+  ) => {
+    (_req as FastifyRequest & { rawBody?: string }).rawBody = body as string;
+    try {
+      done(null, JSON.parse(body as string));
+    } catch (err) {
+      done(err as Error, undefined);
+    }
+  };
+
+  app.addContentTypeParser("application/json", { parseAs: "string" }, storeRawAndParseJson);
+  // Wildcard: handles requests where content-type is absent or unregistered (e.g. QBO webhook probes)
+  app.addContentTypeParser("*", { parseAs: "string" }, storeRawAndParseJson);
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof AppError) {
