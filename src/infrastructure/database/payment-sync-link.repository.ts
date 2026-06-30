@@ -38,3 +38,5 @@ export const paymentSyncLinkRepository = {
     return row as PaymentSyncLinkRecord;
   },
 };
+
+export type PaymentSyncLinkRepository = typeof paymentSyncLinkRepository;
