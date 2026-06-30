@@ -112,16 +112,23 @@ export async function pullInvoice(
 
     // Stale event check
     if (syncLink.qboUpdatedAt && qboResult.qboUpdatedAt <= syncLink.qboUpdatedAt) {
-      await syncLinkRepo.setStatus(syncLink.id, currentVersion, "SYNCED", {});
       await auditLogRepo.create({
         syncLinkId: syncLink.id, action: "skipped_stale", sourceEventId, result: "SUCCESS",
       });
+      await syncLinkRepo.setStatus(syncLink.id, currentVersion, "SYNCED", {});
       return;
     }
 
     const internalInvoice = await invoiceRepo.findById(syncLink.internalId);
     if (!internalInvoice) {
       logger.warn({ internalId: syncLink.internalId }, "pullInvoice: internal invoice not found");
+      await auditLogRepo.create({
+        syncLinkId: syncLink.id,
+        action: "internal_invoice_not_found",
+        sourceEventId,
+        result: "FAILURE",
+        error: `Internal invoice ${syncLink.internalId} not found during update`,
+      });
       await syncLinkRepo.setStatus(syncLink.id, currentVersion, "ERROR", {});
       return;
     }
