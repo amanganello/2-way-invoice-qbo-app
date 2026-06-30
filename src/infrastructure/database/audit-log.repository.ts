@@ -3,7 +3,7 @@ import type { AuditResult } from "@prisma/client";
 
 export type AuditLogRecord = {
   id: string;
-  syncLinkId: string;
+  syncLinkId: string | null;
   action: string;
   sourceEventId: string;
   beforeState: Record<string, unknown> | null;
@@ -15,7 +15,7 @@ export type AuditLogRecord = {
 
 export const auditLogRepository = {
   async create(data: {
-    syncLinkId: string;
+    syncLinkId?: string;
     action: string;
     sourceEventId: string;
     beforeState?: Record<string, unknown>;
@@ -25,7 +25,7 @@ export const auditLogRepository = {
   }): Promise<void> {
     await prisma.auditLog.create({
       data: {
-        syncLinkId: data.syncLinkId,
+        ...(data.syncLinkId !== undefined ? { syncLinkId: data.syncLinkId } : {}),
         action: data.action,
         sourceEventId: data.sourceEventId,
         beforeState: data.beforeState ? JSON.parse(JSON.stringify(data.beforeState)) : undefined,

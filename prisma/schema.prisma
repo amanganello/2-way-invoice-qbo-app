@@ -155,7 +155,7 @@ model EventLog {
 
 model AuditLog {
   id            String      @id @default(cuid())
-  syncLinkId    String
+  syncLinkId    String?
   action        String
   sourceEventId String
   beforeState   Json?
@@ -164,7 +164,7 @@ model AuditLog {
   error         String?
   createdAt     DateTime    @default(now())
 
-  syncLink SyncLink @relation(fields: [syncLinkId], references: [id])
+  syncLink SyncLink? @relation(fields: [syncLinkId], references: [id])
 
   @@index([syncLinkId])
   @@index([sourceEventId])

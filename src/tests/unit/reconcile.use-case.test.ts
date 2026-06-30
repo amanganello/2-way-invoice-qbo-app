@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { reconcileInvoice } from "@/application/sync/reconcile.use-case.js";
 import type { Invoice, QBOInvoicePort, QBOInvoiceResult, QBOSyncContext } from "@/domain/invoices/invoice.types.js";
 import type { SyncLinkRecord } from "@/infrastructure/database/sync-link.repository.js";
@@ -79,7 +79,7 @@ describe("reconcileInvoice", () => {
     expect(deps.qboInvoicePort.voidInvoice).toHaveBeenCalledOnce();
   });
 
-  it("no-ops when invoice is void and no SyncLink exists", async () => {
+  it("no-ops when invoice is void and no SyncLink exists, writes AuditLog", async () => {
     const deps = makeDeps({
       invoiceRepo: { ...makeDeps().invoiceRepo, findById: vi.fn(async () => makeInvoice({ status: "void" })) },
       syncLinkRepo: { ...makeDeps().syncLinkRepo, findByInternalId: vi.fn(async () => null) },
@@ -87,6 +87,9 @@ describe("reconcileInvoice", () => {
     await reconcileInvoice("inv-1", deps as never);
     expect(deps.qboInvoicePort.voidInvoice).not.toHaveBeenCalled();
     expect(deps.qboInvoicePort.createInvoice).not.toHaveBeenCalled();
+    expect(deps.auditLogRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "skipped_no_sync_link_for_void", result: "SUCCESS" })
+    );
   });
 
   it("exits silently when optimistic lock fails", async () => {

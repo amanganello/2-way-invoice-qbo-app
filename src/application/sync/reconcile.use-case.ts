@@ -10,7 +10,7 @@ type PaymentSyncLinkPort = {
 
 type AuditLogPort = {
   create: (data: {
-    syncLinkId: string;
+    syncLinkId?: string;
     action: string;
     sourceEventId: string;
     beforeState?: Record<string, unknown>;
@@ -74,38 +74,17 @@ export async function reconcileInvoice(internalId: string, deps: ReconcileDeps):
   const hasQboId = Boolean(syncLink?.qboId);
 
   try {
-    // void + no qboId → no-op (invoice never reached QBO; nothing to record)
+    // void + no qboId → no-op (invoice never reached QBO); write AuditLog and return
     if (invoice.status === "void" && !hasQboId) {
+      await auditLogRepo.create({
+        action: "skipped_no_sync_link_for_void",
+        sourceEventId,
+        result: "SUCCESS",
+      });
       return;
     }
 
-    // Resolve CustomerRef (needed for create and update paths)
-    let customerRef: string;
-    const customerEntry = await customerMapRepo.findByInternalId(invoice.customerId);
-    if (customerEntry) {
-      customerRef = customerEntry.qboCustomerId;
-    } else if (qbEnvironment === "sandbox" && qbDefaultCustomerId) {
-      customerRef = qbDefaultCustomerId;
-    } else {
-      throw new ExternalServiceError(`No CustomerMap entry for customer: ${invoice.customerId}`);
-    }
-
-    // Build itemMap for line items with internalItemCode
-    const itemMap = new Map<string, { qboItemId: string; taxCode: string }>();
-    const codes = [...new Set(
-      invoice.lineItems
-        .map(li => li.internalItemCode)
-        .filter((c): c is string => Boolean(c))
-    )];
-    for (const code of codes) {
-      const entry = await itemMapRepo.findByInternalCode(code);
-      if (!entry) throw new ExternalServiceError(`No ItemMap entry for code: ${code}`);
-      itemMap.set(code, { qboItemId: entry.qboItemId, taxCode: entry.defaultTaxCode });
-    }
-
-    const ctx: QBOSyncContext = { customerRef, itemMap, docNumber: internalId };
-
-    // void + SyncLink exists → voidInvoice
+    // void + SyncLink exists → voidInvoice (no customer/item resolution needed)
     if (invoice.status === "void" && hasQboId) {
       try {
         const result = await qboInvoicePort.voidInvoice(syncLink!.qboId!, syncLink!.qboSyncToken ?? "0");
@@ -136,6 +115,32 @@ export async function reconcileInvoice(internalId: string, deps: ReconcileDeps):
       }
       return;
     }
+
+    // Resolve CustomerRef (only needed for create and update paths)
+    let customerRef: string;
+    const customerEntry = await customerMapRepo.findByInternalId(invoice.customerId);
+    if (customerEntry) {
+      customerRef = customerEntry.qboCustomerId;
+    } else if (qbEnvironment === "sandbox" && qbDefaultCustomerId) {
+      customerRef = qbDefaultCustomerId;
+    } else {
+      throw new ExternalServiceError(`No CustomerMap entry for customer: ${invoice.customerId}`);
+    }
+
+    // Build itemMap for line items with internalItemCode
+    const itemMap = new Map<string, { qboItemId: string; taxCode: string }>();
+    const codes = [...new Set(
+      invoice.lineItems
+        .map(li => li.internalItemCode)
+        .filter((c): c is string => Boolean(c))
+    )];
+    for (const code of codes) {
+      const entry = await itemMapRepo.findByInternalCode(code);
+      if (!entry) throw new ExternalServiceError(`No ItemMap entry for code: ${code}`);
+      itemMap.set(code, { qboItemId: entry.qboItemId, taxCode: entry.defaultTaxCode });
+    }
+
+    const ctx: QBOSyncContext = { customerRef, itemMap, docNumber: internalId };
 
     // Partially-paid guard: only block lineItems/totalAmount changes.
     // Other fields (dueDate, currency, status) are allowed even on partially-paid invoices.
