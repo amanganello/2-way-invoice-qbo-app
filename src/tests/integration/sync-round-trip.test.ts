@@ -105,6 +105,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await prisma.auditLog.deleteMany();
+  await prisma.eventLog.deleteMany();
   await prisma.paymentSyncLink.deleteMany();
   await prisma.syncLink.deleteMany();
   await prisma.payment.deleteMany();
@@ -113,17 +114,20 @@ beforeEach(async () => {
 
 const TEST_KEY = "a".repeat(64);
 
+// Fix 4: Replace forbidden upsert pattern with explicit findFirst → update/create
 async function qboCredentialsMock() {
-  await prisma.qBOCredentials.upsert({
-    where: { id: (await prisma.qBOCredentials.findFirst())?.id ?? "" },
-    create: {
-      encryptedAccessToken: encrypt("test-token", TEST_KEY),
-      encryptedRefreshToken: encrypt("test-refresh", TEST_KEY),
-      expiresAt: new Date(Date.now() + 3600 * 1000),
-      refreshTokenExpiresAt: new Date(Date.now() + 100 * 24 * 3600 * 1000),
-    },
-    update: {},
-  });
+  const data = {
+    encryptedAccessToken: encrypt("test-token", TEST_KEY),
+    encryptedRefreshToken: encrypt("test-refresh", TEST_KEY),
+    expiresAt: new Date(Date.now() + 3600 * 1000),
+    refreshTokenExpiresAt: new Date(Date.now() + 100 * 24 * 3600 * 1000),
+  };
+  const existing = await prisma.qBOCredentials.findFirst();
+  if (existing) {
+    await prisma.qBOCredentials.update({ where: { id: existing.id }, data });
+  } else {
+    await prisma.qBOCredentials.create({ data });
+  }
 }
 
 describe("Integration: sync round-trips", () => {
@@ -139,6 +143,27 @@ describe("Integration: sync round-trips", () => {
     const syncLink = await syncLinkRepository.findByInternalId(invoice.id);
     expect(syncLink).not.toBeNull();
     expect(syncLink?.qboId).toBe("QBO-INV-1");
+    expect(syncLink?.syncStatus).toBe("SYNCED");
+  });
+
+  // Fix 1: Scenario 2 — update invoice → push to QBO → SyncLink qboSyncToken advanced
+  it("internal update → push to QBO → SyncLink qboSyncToken advanced to '1'", async () => {
+    // Step 1: create and reconcile → SyncLink with SyncToken "0"
+    const invoice = await invoiceRepo.save({
+      id: "inv-integration-update", customerId: "cust-1", lineItems: [],
+      totalAmount: 100, currency: "USD", status: "sent",
+      dueDate: new Date("2030-01-01"), createdAt: new Date(), updatedAt: new Date(),
+    });
+    await reconcileInvoice(invoice.id, baseDeps);
+
+    // Step 2: mutate the invoice
+    await invoiceRepo.save({ ...invoice, totalAmount: 200, updatedAt: new Date() });
+
+    // Step 3: reconcile again — SyncLink now exists → update path → ?operation=update
+    await reconcileInvoice(invoice.id, baseDeps);
+
+    const syncLink = await syncLinkRepository.findByInternalId(invoice.id);
+    expect(syncLink?.qboSyncToken).toBe("1");
     expect(syncLink?.syncStatus).toBe("SYNCED");
   });
 
@@ -173,13 +198,44 @@ describe("Integration: sync round-trips", () => {
     });
     // Second pull with same/older timestamp — should be skipped
     const link = await syncLinkRepository.findByInternalId(invoice.id);
-    const auditsBefore = await auditLogRepository.findBySyncLinkId(link!.id);
     await pullInvoice("QBO-INV-1", "Update", "evt-2", {
       invoiceRepo, syncLinkRepo: syncLinkRepository, qboInvoicePort, auditLogRepo: auditLogRepository,
     });
     const auditsAfter = await auditLogRepository.findBySyncLinkId(link!.id);
     const staleLog = auditsAfter.find(a => a.action === "skipped_stale");
     expect(staleLog).toBeDefined();
+  });
+
+  // Fix 2: Scenario 4 — EventLog unique constraint deduplication
+  it("EventLog unique constraint — duplicate eventId is silently dropped", async () => {
+    // Insert the first event directly (simulating the webhook handler)
+    await prisma.eventLog.create({
+      data: {
+        eventId: "evt-dedup-test-123",
+        source: "QBO",
+        eventType: "Update",
+        payload: { name: "Invoice", id: "QBO-INV-X", operation: "Update", lastUpdated: "2026-06-01T00:00:00Z" },
+      },
+    });
+
+    // Attempt a second insert of the same eventId using createMany + skipDuplicates
+    // (the exact pattern used by the webhook handler)
+    const result = await prisma.eventLog.createMany({
+      data: [{
+        eventId: "evt-dedup-test-123",
+        source: "QBO",
+        eventType: "Update",
+        payload: { name: "Invoice", id: "QBO-INV-X", operation: "Update", lastUpdated: "2026-06-01T00:00:00Z" },
+      }],
+      skipDuplicates: true,
+    });
+
+    // The duplicate was silently dropped
+    expect(result.count).toBe(0);
+
+    // Only one EventLog row exists for this eventId
+    const count = await prisma.eventLog.count({ where: { eventId: "evt-dedup-test-123" } });
+    expect(count).toBe(1);
   });
 
   it("internal void → QBO void called", async () => {
@@ -212,6 +268,50 @@ describe("Integration: sync round-trips", () => {
 
     const updated = await invoiceRepo.findById(invoice.id);
     expect(updated?.status).toBe("void");
+  });
+
+  // Fix 3: Scenario 5 — Conflict detection (dueDate changed on both sides)
+  it("pull with dueDate changed on both sides → CONFLICT status", async () => {
+    // Step 1: create invoice with dueDate 2030-01-01 and reconcile
+    // After reconcile, lastSyncedSnapshot.dueDate = "2030-01-01T00:00:00.000Z"
+    const invoice = await invoiceRepo.save({
+      id: "inv-integration-conflict", customerId: "cust-1", lineItems: [],
+      totalAmount: 100, currency: "USD", status: "sent",
+      dueDate: new Date("2030-01-01"), createdAt: new Date(), updatedAt: new Date(),
+    });
+    await reconcileInvoice(invoice.id, baseDeps);
+
+    // Step 2: mutate the internal dueDate — differs from snapshot
+    await invoiceRepo.save({ ...invoice, dueDate: new Date("2030-06-01"), updatedAt: new Date() });
+
+    // Step 3: override the MSW GET handler to return a QBO invoice with a DIFFERENT dueDate
+    // (different from both snapshot "2030-01-01" and internal "2030-06-01") and a newer timestamp
+    server.use(
+      http.get(`${QBO_BASE}/invoice/QBO-INV-1`, () =>
+        HttpResponse.json({
+          Invoice: {
+            Id: "QBO-INV-1", SyncToken: "2",
+            CustomerRef: { value: "1" }, Line: [],
+            TotalAmt: 100, DueDate: "2031-01-01", CurrencyRef: { value: "USD" },
+            MetaData: { CreateTime: "2026-01-01T00:00:00Z", LastUpdatedTime: "2031-01-01T00:00:00Z" },
+          },
+        })
+      )
+    );
+
+    try {
+      // Step 4: pull — dueDate changed on both sides → rule "manual" → CONFLICT
+      await pullInvoice("QBO-INV-1", "Update", "evt-conflict-test", {
+        invoiceRepo, syncLinkRepo: syncLinkRepository, qboInvoicePort, auditLogRepo: auditLogRepository,
+      });
+    } finally {
+      // Restore the default GET handler
+      server.resetHandlers();
+    }
+
+    // Step 5: assert CONFLICT status
+    const syncLink = await syncLinkRepository.findByInternalId(invoice.id);
+    expect(syncLink?.syncStatus).toBe("CONFLICT");
   });
 
   it("payment sync → PaymentSyncLink created", async () => {
