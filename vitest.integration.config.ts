@@ -1,23 +1,21 @@
 import { defineConfig } from "vitest/config";
 import { fileURLToPath, URL } from "node:url";
 
-const alias = { "@": fileURLToPath(new URL("./src", import.meta.url)) };
-
 export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    include: ["src/tests/e2e/**/*.test.ts", "src/tests/unit/**/*.test.ts"],
-    exclude: ["src/tests/integration/**", "src/tests/sandbox/**"],
+    include: ["src/tests/integration/**/*.test.ts"],
+    testTimeout: 30000,
     env: {
       NODE_ENV: "test",
-      DATABASE_URL: "postgresql://test:test@localhost:5432/test",
+      DATABASE_URL: "postgresql://invoice_user:invoice_pass@localhost:5432/invoice_sync_test",
       QB_CLIENT_ID: "test-client-id",
       QB_CLIENT_SECRET: "test-client-secret",
       QB_REDIRECT_URI: "http://localhost:3000/callback",
       QB_ENVIRONMENT: "sandbox",
-      QB_REALM_ID: "test-realm-id",
-      QB_WEBHOOK_VERIFIER_TOKEN: "test-webhook-token",
+      QB_REALM_ID: "test-realm",
+      QB_WEBHOOK_VERIFIER_TOKEN: "test-token",
       TOKEN_ENCRYPTION_KEY: "a".repeat(64),
       API_KEY: "test-api-key",
       REDIS_URL: "redis://localhost:6379",
@@ -26,5 +24,5 @@ export default defineConfig({
       QBO_RATE_LIMIT_MAX: "2",
     },
   },
-  resolve: { alias },
+  resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
 });
