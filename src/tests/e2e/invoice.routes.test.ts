@@ -59,6 +59,7 @@ describe("Invoice routes", () => {
     const response = await app.inject({
       method: "POST",
       url: "/invoices",
+      headers: { authorization: "Bearer test-api-key" },
       payload: {
         customerId: "cust-1",
         lineItems: [
@@ -90,6 +91,7 @@ describe("Invoice routes", () => {
     const response = await app.inject({
       method: "PATCH",
       url: "/invoices/inv-1",
+      headers: { authorization: "Bearer test-api-key" },
       payload: {
         totalAmount: 150,
       },
@@ -106,6 +108,7 @@ describe("Invoice routes", () => {
     const response = await app.inject({
       method: "PATCH",
       url: "/invoices/missing",
+      headers: { authorization: "Bearer test-api-key" },
       payload: {
         totalAmount: 150,
       },
