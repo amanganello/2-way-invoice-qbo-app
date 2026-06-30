@@ -43,3 +43,5 @@ export const auditLogRepository = {
     }) as Promise<AuditLogRecord[]>;
   },
 };
+
+export type AuditLogRepository = typeof auditLogRepository;
