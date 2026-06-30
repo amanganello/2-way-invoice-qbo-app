@@ -26,8 +26,9 @@ export function buildApp() {
   };
 
   app.addContentTypeParser("application/json", { parseAs: "string" }, storeRawAndParseJson);
-  // Wildcard: handles requests where content-type is absent or unregistered (e.g. QBO webhook probes)
-  app.addContentTypeParser("*", { parseAs: "string" }, storeRawAndParseJson);
+  // Note: the wildcard "*" parser is intentionally NOT registered globally here.
+  // It is scoped to the /webhooks/qbo route only, via a Fastify encapsulated plugin
+  // in src/infrastructure/http/webhooks/webhook.routes.ts, so it cannot affect other routes.
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof AppError) {
