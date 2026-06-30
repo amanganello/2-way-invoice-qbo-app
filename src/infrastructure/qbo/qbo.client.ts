@@ -87,7 +87,7 @@ export class QBOClient {
 
   private async refreshWithRetry(refreshToken: string, attempt = 1): Promise<string> {
     try {
-      const { OAuthClient } = await import("intuit-oauth");
+      const { default: OAuthClient } = await import("intuit-oauth");
       const client = new OAuthClient({
         clientId: env.QB_CLIENT_ID,
         clientSecret: env.QB_CLIENT_SECRET,

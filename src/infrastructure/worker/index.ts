@@ -9,6 +9,8 @@ import { env } from "@/config/env.js";
 import logger from "@/infrastructure/logger/index.js";
 
 export function startWorkers(): { workers: Worker[]; stop: () => Promise<void> } {
+  // Retry config (attempts + backoff) belongs on the Queue, not the Worker.
+  // See src/infrastructure/queue/queues.ts for defaultJobOptions.
   const invoiceSyncWorker = new Worker("invoice-sync", async (job) => {
     if (job.name === "reconcile") return reconcileProcessor(job as never);
     if (job.name === "pull") return pullProcessor(job as never);
@@ -16,10 +18,6 @@ export function startWorkers(): { workers: Worker[]; stop: () => Promise<void> }
     connection: redisConnection,
     concurrency: 5,
     limiter: { max: env.QBO_RATE_LIMIT_MAX, duration: 1000 },
-    defaultJobOptions: {
-      attempts: env.SYNC_JOB_MAX_RETRIES,
-      backoff: { type: 'exponential', delay: 5000 },
-    },
   });
 
   const paymentSyncWorker = new Worker("payment-sync", async (job) => {
@@ -27,10 +25,6 @@ export function startWorkers(): { workers: Worker[]; stop: () => Promise<void> }
   }, {
     connection: redisConnection,
     concurrency: 2,
-    defaultJobOptions: {
-      attempts: env.SYNC_JOB_MAX_RETRIES,
-      backoff: { type: 'exponential', delay: 5000 },
-    },
   });
 
   const reconciliationWorker = new Worker("reconciliation", async () => {
@@ -38,10 +32,6 @@ export function startWorkers(): { workers: Worker[]; stop: () => Promise<void> }
   }, {
     connection: redisConnection,
     concurrency: 1,
-    defaultJobOptions: {
-      attempts: env.SYNC_JOB_MAX_RETRIES,
-      backoff: { type: 'exponential', delay: 5000 },
-    },
   });
 
   const workers = [invoiceSyncWorker, paymentSyncWorker, reconciliationWorker];

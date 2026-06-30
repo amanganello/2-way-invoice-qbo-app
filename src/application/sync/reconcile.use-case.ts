@@ -24,6 +24,10 @@ export type ReconcileDeps = {
   invoiceRepo: InvoiceRepository;
   syncLinkRepo: SyncLinkRepository;
   paymentSyncLinkRepo: PaymentSyncLinkPort;
+  // accountMapRepo is retained in the type for future use but is not called at runtime:
+  // QBO derives the income account from the Item record (via ItemRef), so per-line
+  // AccountMap resolution is not needed during create/update. If direct account mapping
+  // is required in a future task, wire it into buildLines in qbo-invoice.adapter.ts.
   accountMapRepo: { findByInternalCode: (code: string) => Promise<{ qboAccountId: string } | null> };
   itemMapRepo: { findByInternalCode: (code: string) => Promise<{ qboItemId: string; defaultTaxCode: string } | null> };
   customerMapRepo: { findByInternalId: (id: string) => Promise<{ qboCustomerId: string } | null> };

@@ -45,7 +45,15 @@ function toResult(entity: QBOInvoiceEntity, fallbackInvoice?: Partial<Invoice>):
       })),
     totalAmount: entity.TotalAmt ?? 0,
     currency: entity.CurrencyRef?.value ?? "USD",
-    status: "sent" as InvoiceStatus,
+    // QBO has no explicit status enum. Derive internal status from available fields:
+    // - No line items AND TotalAmt === 0 → invoice was voided via the void API
+    // - DocNumber absent or empty → invoice is still a draft in QBO
+    // - Otherwise → sent/posted
+    status: (
+      (!entity.Line?.length && (entity.TotalAmt ?? 0) === 0)
+        ? "void"
+        : (!entity.DocNumber ? "draft" : "sent")
+    ) as InvoiceStatus,
     dueDate: entity.DueDate ? new Date(entity.DueDate) : new Date(),
     createdAt: entity.MetaData ? new Date(entity.MetaData.CreateTime) : new Date(),
     updatedAt: entity.MetaData ? new Date(entity.MetaData.LastUpdatedTime) : new Date(),
