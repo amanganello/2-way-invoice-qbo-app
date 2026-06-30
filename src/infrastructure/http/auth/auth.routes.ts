@@ -13,16 +13,16 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         valid: false,
         expiresAt: null,
         refreshTokenExpiresAt: null,
-        refreshTokenWarning: false,
+        refreshTokenExpiringSoon: false,
       });
     }
 
     const now = Date.now();
     const valid = creds.expiresAt.getTime() > now;
     const daysLeft = (creds.refreshTokenExpiresAt.getTime() - now) / (1000 * 60 * 60 * 24);
-    const refreshTokenWarning = daysLeft < REFRESH_TOKEN_WARN_DAYS;
+    const refreshTokenExpiringSoon = daysLeft < REFRESH_TOKEN_WARN_DAYS;
 
-    if (refreshTokenWarning) {
+    if (refreshTokenExpiringSoon) {
       logger.warn({ daysLeft: Math.floor(daysLeft) }, "QBO refresh token expiring soon");
     }
 
@@ -30,7 +30,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       valid,
       expiresAt: creds.expiresAt.toISOString(),
       refreshTokenExpiresAt: creds.refreshTokenExpiresAt.toISOString(),
-      refreshTokenWarning,
+      refreshTokenExpiringSoon,
     });
   });
 }

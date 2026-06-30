@@ -35,12 +35,12 @@ describe("Auth routes", () => {
       headers: { authorization: "Bearer test-api-key" },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ valid: boolean; refreshTokenWarning: boolean }>();
+    const body = res.json<{ valid: boolean; refreshTokenExpiringSoon: boolean }>();
     expect(body.valid).toBe(true);
-    expect(body.refreshTokenWarning).toBe(false);
+    expect(body.refreshTokenExpiringSoon).toBe(false);
   });
 
-  it("GET /auth/qbo/status sets refreshTokenWarning=true when <14 days remain", async () => {
+  it("GET /auth/qbo/status sets refreshTokenExpiringSoon=true when <14 days remain", async () => {
     mockCreds.mockResolvedValueOnce({
       accessToken: "tok",
       refreshToken: "ref",
@@ -52,6 +52,6 @@ describe("Auth routes", () => {
       headers: { authorization: "Bearer test-api-key" },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json<{ refreshTokenWarning: boolean }>().refreshTokenWarning).toBe(true);
+    expect(res.json<{ refreshTokenExpiringSoon: boolean }>().refreshTokenExpiringSoon).toBe(true);
   });
 });
