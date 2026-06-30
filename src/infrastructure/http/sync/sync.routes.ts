@@ -7,6 +7,7 @@ import { itemMapRepository } from "@/infrastructure/database/item-map.repository
 import { customerMapRepository } from "@/infrastructure/database/customer-map.repository.js";
 import { qboClient } from "@/infrastructure/qbo/qbo.client.js";
 import { invoiceSyncQueue } from "@/infrastructure/queue/queues.js";
+import { QBOInvoiceAdapter } from "@/infrastructure/qbo/qbo-invoice.adapter.js";
 import type { SyncStatus } from "@prisma/client";
 import type { QBOAccount, QBOItem, QBOCustomer } from "@/infrastructure/qbo/qbo.types.js";
 import { SyncLinksQuerySchema, SyncLinkParamsSchema, ResolveConflictSchema } from "./sync.schemas.js";
@@ -61,22 +62,12 @@ export async function registerSyncRoutes(app: FastifyInstance): Promise<void> {
     // Apply chosen strategy
     if (strategy === "accept-internal") {
       await syncLinkRepository.setStatus(syncLink.id, syncLink.version, "PENDING", {});
+      // Re-trigger sync to push internal data to QBO
+      await invoiceSyncQueue.add("reconcile", { internalId: syncLink.internalId }, { jobId: `reconcile-${syncLink.internalId}` });
     } else {
-      // accept-qbo: fetch QBO state and overwrite internal
-      if (syncLink.qboId) {
-        const { QBOInvoiceAdapter } = await import("@/infrastructure/qbo/qbo-invoice.adapter.js");
-        const adapter = new QBOInvoiceAdapter();
-        const qboResult = await adapter.getInvoice(syncLink.qboId);
-        const internal = await invoiceRepo.findById(syncLink.internalId);
-        if (internal) {
-          await invoiceRepo.save({ ...internal, ...qboResult.invoice, id: internal.id, createdAt: internal.createdAt, updatedAt: new Date() });
-        }
-      }
-      await syncLinkRepository.setStatus(syncLink.id, syncLink.version, "PENDING", {});
+      // accept-qbo: QBO state is already correct, no push needed
+      await syncLinkRepository.setStatus(syncLink.id, syncLink.version, "SYNCED", {});
     }
-
-    // Re-trigger sync
-    await invoiceSyncQueue.add("reconcile", { internalId: syncLink.internalId }, { jobId: `reconcile-${syncLink.internalId}` });
 
     return reply.send({ ok: true, strategy, internalId: syncLink.internalId });
   });

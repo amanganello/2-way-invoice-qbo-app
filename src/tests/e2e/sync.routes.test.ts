@@ -71,15 +71,30 @@ describe("Sync routes", () => {
 
   it("POST /sync/conflicts/:id/resolve accept-internal re-enqueues reconcile", async () => {
     mockInvoiceSyncQueue.add.mockClear();
+    mockSyncLinkRepo.setStatus.mockClear();
     const res = await app.inject({
       method: "POST", url: "/sync/conflicts/sl-1/resolve",
       headers: { ...AUTH, "content-type": "application/json" },
       payload: JSON.stringify({ strategy: "accept-internal" }),
     });
     expect(res.statusCode).toBe(200);
+    expect(mockSyncLinkRepo.setStatus).toHaveBeenCalledWith("sl-1", 0, "PENDING", {});
     expect(mockInvoiceSyncQueue.add).toHaveBeenCalledWith(
       "reconcile", { internalId: "inv-1" }, expect.objectContaining({ jobId: "reconcile-inv-1" })
     );
+  });
+
+  it("POST /sync/conflicts/:id/resolve accept-qbo sets SYNCED and skips enqueue", async () => {
+    mockInvoiceSyncQueue.add.mockClear();
+    mockSyncLinkRepo.setStatus.mockClear();
+    const res = await app.inject({
+      method: "POST", url: "/sync/conflicts/sl-1/resolve",
+      headers: { ...AUTH, "content-type": "application/json" },
+      payload: JSON.stringify({ strategy: "accept-qbo" }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockSyncLinkRepo.setStatus).toHaveBeenCalledWith("sl-1", 0, "SYNCED", {});
+    expect(mockInvoiceSyncQueue.add).not.toHaveBeenCalled();
   });
 
   it("POST /sync/initial-load/qbo-to-internal returns 501", async () => {
