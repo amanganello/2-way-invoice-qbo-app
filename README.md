@@ -15,7 +15,7 @@ BullMQ · Redis
 - pnpm
 - Docker + Docker Compose
 - A QuickBooks Online developer account and sandbox company
-  (https://developer.intuit.com)
+  (<https://developer.intuit.com>)
 - ngrok or equivalent for local webhook delivery
 
 ---
@@ -185,31 +185,38 @@ All endpoints except `POST /webhooks/qbo` require:
 `Authorization: Bearer <API_KEY>`
 
 **Health**
+
 - `GET /health` — liveness check
 
 **Auth**
+
 - `GET /auth/qbo/status` — returns QBO credential validity, expiry,
   and refresh token warning
 
 **Webhooks**
+
 - `POST /webhooks/qbo` — QBO change notifications (HMAC verified)
 
 **Sync Status**
+
 - `GET /sync/links` — list SyncLink records (`?syncStatus=&limit=`)
 - `GET /sync/links/:id` — detail with AuditLog entries
 
 **Conflict Resolution**
+
 - `GET /sync/conflicts` — list invoices in CONFLICT status
 - `POST /sync/conflicts/:id/resolve` — resolve with
   `{ "strategy": "accept-internal" | "accept-qbo" }`
 
 **Initial Load**
+
 - `POST /sync/initial-load/internal-to-qbo` — push all unlinked
   internal invoices to QBO (idempotent)
 - `POST /sync/initial-load/qbo-to-internal` — not implemented,
   returns 501 (see Tradeoffs)
 
 **Mappings**
+
 - `POST /sync/mappings/import` — import accounts, items, customers
   from QBO
 - `GET /sync/mappings` — list current mapping tables
@@ -279,10 +286,7 @@ use-case to prevent enqueuing a reconcile job.
 - **Customer mapping required before first push.** Run
   `POST /sync/mappings/import` first. Use `QB_DEFAULT_CUSTOMER_ID`
   in sandbox to bypass.
-- **DocNumber mutability.** The qbo-to-internal initial load uses
-  DocNumber to match QBO invoices to internal records. QBO allows
-  users to overwrite DocNumber — if overwritten, the load creates
-  a duplicate instead of linking.
+
 - **No soft-delete support.** Internal deletes are treated as QBO
   voids. QBO has no un-void API — restore-from-delete is not supported.
 - **Partially-paid invoice guard blocks only financial fields.** When an
@@ -318,8 +322,9 @@ creates a duplicate. This complexity, combined with the risk of
 mis-linkage, makes it the highest-effort feature relative to
 evaluation signal. The internal-to-qbo direction and the ongoing
 webhook-driven sync fully demonstrate the core bidirectional
-architecture. The intended design is documented in Section 9 of the
-design spec.
+architecture. The intended design: paginate QBO invoices, match each by DocNumber
+against internal IDs, create a SyncLink for matches and a new internal Invoice
+for unmatched records, run as a background job returning 202 Accepted immediately.
 
 **Why AES-256-GCM encryption was kept**
 
@@ -368,9 +373,11 @@ same refresh token — Intuit refresh tokens are one-time-use, so the
 second call would fail or produce a token immediately overwritten by the
 first. A Redis `NX` lock would be required for multi-worker deployments,
 but adds TTL management and lock-release complexity that is
-disproportionate to this single-worker architecture. The production path
-to distributed locking is noted in the design spec's Out of Scope
-section.
+disproportionate to this single-worker architecture. A production multi-worker deployment
+would replace this with a Redis SET NX PX lock on a shared key,
+with a TTL slightly longer than the Intuit refresh call timeout.
+
+---
 
 ## Debugging
 
