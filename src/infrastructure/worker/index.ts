@@ -16,15 +16,33 @@ export function startWorkers(): { workers: Worker[]; stop: () => Promise<void> }
     connection: redisConnection,
     concurrency: 5,
     limiter: { max: env.QBO_RATE_LIMIT_MAX, duration: 1000 },
+    defaultJobOptions: {
+      attempts: env.SYNC_JOB_MAX_RETRIES,
+      backoff: { type: 'exponential', delay: 5000 },
+    },
   });
 
   const paymentSyncWorker = new Worker("payment-sync", async (job) => {
     return paymentProcessor(job as never);
-  }, { connection: redisConnection, concurrency: 2 });
+  }, {
+    connection: redisConnection,
+    concurrency: 2,
+    defaultJobOptions: {
+      attempts: env.SYNC_JOB_MAX_RETRIES,
+      backoff: { type: 'exponential', delay: 5000 },
+    },
+  });
 
   const reconciliationWorker = new Worker("reconciliation", async () => {
     return reconciliationProcessor();
-  }, { connection: redisConnection, concurrency: 1 });
+  }, {
+    connection: redisConnection,
+    concurrency: 1,
+    defaultJobOptions: {
+      attempts: env.SYNC_JOB_MAX_RETRIES,
+      backoff: { type: 'exponential', delay: 5000 },
+    },
+  });
 
   const workers = [invoiceSyncWorker, paymentSyncWorker, reconciliationWorker];
 
@@ -37,12 +55,13 @@ export function startWorkers(): { workers: Worker[]; stop: () => Promise<void> }
     });
   }
 
-  startScheduler();
+  const scheduler = startScheduler();
   logger.info("Workers started");
 
   return {
     workers,
     stop: async () => {
+      scheduler.stop();
       await Promise.all(workers.map(w => w.close()));
       logger.info("Workers stopped");
     },
