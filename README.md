@@ -1,8 +1,23 @@
 # Invoice Sync Service
 
-A backend service that syncs invoices, payments, and general ledger
-accounts bidirectionally between an internal invoicing system and
-QuickBooks Online (QBO).
+A production-ready backend service that keeps invoices, payments, and
+general ledger accounts in sync between an internal invoicing system and
+QuickBooks Online (QBO) — in both directions.
+
+Internal changes (create, update, void) are pushed to QBO via a durable
+job queue. QBO changes made by accountants arrive via webhook and are
+pulled into the internal system. Field-level conflict detection handles
+the case where both sides change the same invoice concurrently.
+
+Key properties:
+- **Durable** — BullMQ with exponential backoff; reconciliation watchdog
+  re-queues stuck or failed jobs every 15 minutes
+- **Idempotent** — BullMQ jobId deduplication + EventLog unique constraint
+  + find-or-link on duplicate QBO create
+- **Loop-safe** — pull path writes directly to the DB, never through the
+  invoice use-case, preventing infinite push/pull cycles
+- **Conflict-aware** — field-level rules auto-resolve most conflicts;
+  `dueDate` changes on both sides require human resolution via API
 
 Built with: Node.js 24 · TypeScript · Fastify · PostgreSQL · Prisma ·
 BullMQ · Redis
