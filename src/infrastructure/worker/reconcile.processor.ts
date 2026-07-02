@@ -24,6 +24,7 @@ export async function reconcileProcessor(job: Job<{ internalId: string }>): Prom
     qboInvoicePort,
     auditLogRepo: auditLogRepository,
     qbDefaultCustomerId: env.QB_DEFAULT_CUSTOMER_ID,
+    qbDefaultItemId: env.QB_DEFAULT_ITEM_ID,
     qbEnvironment: env.QB_ENVIRONMENT,
   });
 }

@@ -12,6 +12,7 @@ const envSchema = z.object({
   QB_REALM_ID: z.string().min(1, "QB_REALM_ID is required"),
   QB_WEBHOOK_VERIFIER_TOKEN: z.string().min(1, "QB_WEBHOOK_VERIFIER_TOKEN is required"),
   QB_DEFAULT_CUSTOMER_ID: z.string().optional(),
+  QB_DEFAULT_ITEM_ID: z.string().optional(),
 
   TOKEN_ENCRYPTION_KEY: z.string().length(64, "TOKEN_ENCRYPTION_KEY must be 32-byte hex (64 chars)").regex(/^[0-9a-f]{64}$/i, "TOKEN_ENCRYPTION_KEY must be 32-byte hex (64 hex chars)"),
   API_KEY: z.string().min(1, "API_KEY is required"),

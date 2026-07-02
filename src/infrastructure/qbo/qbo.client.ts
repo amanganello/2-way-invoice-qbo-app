@@ -114,7 +114,11 @@ export class QBOClient {
       await qboCredentialsRepository.updateTokens(newCreds);
       return newCreds.accessToken;
     } catch (err) {
-      if (attempt < 3) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Never retry auth rejections — Intuit refresh tokens are one-time-use.
+      // Retrying with a consumed token just burns the next token too.
+      const isAuthError = msg.toLowerCase().includes("invalid") || msg.toLowerCase().includes("unauthorized") || msg.toLowerCase().includes("authorize");
+      if (!isAuthError && attempt < 3) {
         await new Promise(r => setTimeout(r, 5000));
         return this.refreshWithRetry(refreshToken, attempt + 1);
       }

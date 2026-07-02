@@ -28,64 +28,103 @@ BullMQ · Redis
 pnpm install
 ```
 
-### 2. Start infrastructure
-
-```bash
-docker compose up -d
-```
-
-Starts PostgreSQL and Redis locally.
-
-### 3. Configure environment
+### 2. Configure environment
 
 ```bash
 cp .env.example .env
 ```
 
-Fill in all values. See Environment Variables below.
+Fill in all values. See [Environment Variables](#environment-variables) below.
+Generate the encryption key with:
+
+```bash
+openssl rand -hex 32
+```
+
+### 3. Start infrastructure
+
+```bash
+docker compose up -d postgres redis
+```
 
 ### 4. Run database migrations
 
 ```bash
-pnpm prisma migrate dev
+pnpm prisma migrate deploy
 ```
 
 ### 5. Authenticate with QuickBooks
 
-Run the one-time OAuth flow:
+This is a one-time step that stores encrypted OAuth tokens in the database.
+Ensure `QB_REDIRECT_URI=http://localhost:3000/callback` is set in `.env`
+and that nothing else is running on port 3000 — the auth script starts its
+own temporary server to capture the callback.
 
 ```bash
-pnpm tsx scripts/qbo-auth.ts
+pnpm qbo-auth
 ```
 
-Follow the printed URL, complete the OAuth consent, and paste the
-redirect URL back into the terminal. Tokens are encrypted and stored
-in the database automatically.
+Open the printed URL in a browser and complete the OAuth consent. The
+terminal will confirm when tokens are saved and print their expiry times.
 
-### 6. Import QBO mappings
+### 6. Configure webhook delivery
 
-Before pushing any invoices, import the mapping tables:
+QBO webhooks require a public URL. For local development use ngrok:
 
 ```bash
-curl -X POST http://localhost:3000/sync/mappings/import \
-  -H "Authorization: Bearer $API_KEY"
+ngrok http 3000
 ```
 
-This populates AccountMap, ItemMap, and CustomerMap from your
-QBO sandbox. Must be run before the first invoice push.
+In the QBO developer portal, set the webhook endpoint to:
+`https://<ngrok-id>.ngrok-free.dev/webhooks/qbo`
 
-Sandbox shortcut: set `QB_DEFAULT_CUSTOMER_ID` in `.env` to skip
-customer mapping during initial testing. Never use this in production.
+Copy the Verifier Token from the portal into `QB_WEBHOOK_VERIFIER_TOKEN`
+in `.env`. Without this, webhook signature verification will reject all
+incoming events.
 
 ### 7. Start the service
 
-```bash
-# Development (with watch)
-pnpm dev
+The service runs as two separate processes. Open two terminals:
 
-# Production
-pnpm build && pnpm start
+**Terminal 1 — HTTP server:**
+```bash
+pnpm dev
 ```
+Should log: `Server listening at http://0.0.0.0:3000`
+
+**Terminal 2 — Queue worker:**
+```bash
+pnpm worker
+```
+Should log: `Workers started`
+
+The worker handles all BullMQ jobs (reconcile push, pull from QBO,
+payment sync, polling reconciliation). Without it, invoices will be
+created in the DB but never synced to QBO.
+
+### 8. Import QBO mappings
+
+With the service running, pull accounts, items, and customers from your
+QBO sandbox:
+
+```bash
+curl -X POST http://localhost:3000/sync/mappings/import \
+  -H "Authorization: Bearer $(grep API_KEY .env | cut -d= -f2)"
+```
+
+This must be done before pushing any invoices. For initial testing
+without per-line item mapping, set these two shortcuts in `.env`
+(sandbox only — never use in production):
+
+- `QB_DEFAULT_CUSTOMER_ID` — bypasses CustomerMap lookup; use a QBO
+  customer ID (short numeric string like `"28"`) from `GET /sync/mappings`
+  → `.customers[0].qboCustomerId`
+- `QB_DEFAULT_ITEM_ID` — used when line items have no `internalItemCode`;
+  find a valid item ID by checking `GET /sync/mappings` after import and
+  copying any `.items[0].qboItemId`
+
+If you get a `502 QBO token refresh failed` error, re-run `pnpm qbo-auth`
+to get fresh tokens and retry.
 
 ---
 
@@ -114,19 +153,6 @@ SyncLink created, duplicate webhook deduplication, conflict detection
 and resolution, timeout-after-write recovery, payment sync, partially
 paid invoice blocking.
 
-### Sandbox tests (real QBO API)
-
-```bash
-pnpm test:sandbox
-```
-
-Requires valid `QB_*` env vars pointing to a live sandbox account.
-Not run in CI — run manually before submission.
-
-Covers: full invoice lifecycle (create → update → void) against real
-QBO API, payment creation and linkage, webhook delivery, token refresh
-under real OAuth flow, account/item/customer import.
-
 ---
 
 ## Webhook Setup
@@ -138,7 +164,7 @@ ngrok http 3000
 ```
 
 Set the ngrok URL as your webhook endpoint in the QBO developer portal:
-`https://<ngrok-id>.ngrok.io/webhooks/qbo`
+`https://<ngrok-id>.ngrok-free.dev/webhooks/qbo`
 
 Copy the Verifier Token from the portal into `QB_WEBHOOK_VERIFIER_TOKEN`.
 
@@ -160,6 +186,7 @@ QB_ENVIRONMENT=sandbox      # sandbox | production
 QB_REALM_ID=                # QBO company ID (shown after OAuth)
 QB_WEBHOOK_VERIFIER_TOKEN=  # from QBO developer portal webhook settings
 QB_DEFAULT_CUSTOMER_ID=     # sandbox only — bypasses CustomerMap lookup
+QB_DEFAULT_ITEM_ID=         # sandbox only — used when line items have no internalItemCode
 
 # Token encryption
 TOKEN_ENCRYPTION_KEY=       # 32-byte hex: openssl rand -hex 32
@@ -184,38 +211,38 @@ QBO_RATE_LIMIT_MAX=2        # QBO API calls/second — keep at 2 for sandbox (15
 All endpoints except `POST /webhooks/qbo` require:
 `Authorization: Bearer <API_KEY>`
 
-**Health**
+### Health
 
 - `GET /health` — liveness check
 
-**Auth**
+### Auth
 
 - `GET /auth/qbo/status` — returns QBO credential validity, expiry,
   and refresh token warning
 
-**Webhooks**
+### Webhooks
 
 - `POST /webhooks/qbo` — QBO change notifications (HMAC verified)
 
-**Sync Status**
+### Sync Status
 
 - `GET /sync/links` — list SyncLink records (`?syncStatus=&limit=`)
 - `GET /sync/links/:id` — detail with AuditLog entries
 
-**Conflict Resolution**
+### Conflict Resolution
 
 - `GET /sync/conflicts` — list invoices in CONFLICT status
 - `POST /sync/conflicts/:id/resolve` — resolve with
   `{ "strategy": "accept-internal" | "accept-qbo" }`
 
-**Initial Load**
+### Initial Load
 
 - `POST /sync/initial-load/internal-to-qbo` — push all unlinked
   internal invoices to QBO (idempotent)
 - `POST /sync/initial-load/qbo-to-internal` — not implemented,
-  returns 501 (see Tradeoffs)
+  returns 501 (see DESIGN.md)
 
-**Mappings**
+### Mappings
 
 - `POST /sync/mappings/import` — import accounts, items, customers
   from QBO
@@ -223,159 +250,33 @@ All endpoints except `POST /webhooks/qbo` require:
 
 ---
 
-## Architecture
+## Assumptions
 
-Modular monolith. One Fastify process with strict internal boundaries:
-
-```
-domain/         — Invoice/Payment types, port interfaces (no external deps)
-application/    — Use-cases, sync engine, conflict rules
-infrastructure/ — Prisma, QBO adapter, BullMQ workers, HTTP routes
-shared/         — AppError subclasses
-```
-
-**Sync model:** all outbound changes use a reconcile job
-(`jobId: reconcile-${internalId}`). The worker reads current invoice
-state at execution time and decides the QBO operation — never typed
-jobs. This prevents jobId collisions and state races when multiple
-changes arrive for the same invoice.
-
-**Loop prevention:** after a push to QBO, the worker stores QBO's
-`MetaData.LastUpdatedTime` in `SyncLink.qboUpdatedAt`. When QBO fires
-a webhook in response, the pull worker compares timestamps and drops
-the event as stale. The pull path writes directly to the DB repository
-and never calls the invoice use-case — calling the use-case would
-enqueue a reconcile job for every inbound change.
-
-**Idempotency:** BullMQ jobId deduplication collapses concurrent
-changes into one job. EventLog unique constraint on `eventId` is the
-webhook deduplication guard. Find-or-link on duplicate QBO errors
-prevents double-creation on retries.
-
-**Payment idempotency:** `PaymentSyncLink` has no `version` field and
-no `PROCESSING` state. Payments are append-only in QBO — there is no
-update path, so no concurrent-worker race exists on payment records. A
-`findByInternalId` pre-check before writing is sufficient. If two
-workers race past the check simultaneously, the duplicate QBO error is
-caught and resolved via `PaymentRefNum` lookup. Optimistic locking would
-add schema and code complexity without protecting against any real
-failure mode.
-
-**Void handling:** the pull worker handles void/delete events with three
-explicit branches before making any QBO API call. If the internal
-invoice is missing (SyncLink exists but invoice was deleted from the
-internal DB) — sets `ERROR` with audit action `void_internal_not_found`.
-If the invoice is already voided — sets `SYNCED` with audit action
-`skipped_already_voided` (idempotent, no write). Otherwise — saves the
-invoice with `status: void` directly to the repository, bypassing the
-use-case to prevent enqueuing a reconcile job.
+- Both systems expose APIs and emit webhook-like change notifications.
+- Webhook payloads are minimal (entity type + id only) — the service
+  always refetches the full entity from QBO before processing.
+- Events may be duplicated, delayed, or arrive out of order — the
+  service handles all three explicitly.
+- A single QBO company per deployment (single-tenant).
+- Internal invoice deletes are treated as voids in QBO. QBO has no
+  un-void API, so restore-from-delete is not supported.
+- The internal system sets `DocNumber = internalId` on all outbound
+  pushes. This is the key used to find existing QBO invoices on retry
+  after a timeout-before-write.
+- QBO rate limits apply: sandbox cap is ~150 req/min.
+  `QBO_RATE_LIMIT_MAX` defaults to 2/second to stay within that cap.
+- `TOKEN_ENCRYPTION_KEY` is managed out of band and never stored in
+  the database. Rotation requires manual re-encryption.
+- If the service is inactive for more than 100 days, the QBO refresh
+  token expires and `pnpm qbo-auth` must be re-run.
 
 ---
 
-## Known Limitations
+## Design
 
-- **Single-tenant only.** One QBO company per deployment.
-- **QBO rate limits.** Sandbox cap is ~150 req/min. `QBO_RATE_LIMIT_MAX`
-  defaults to 2/second (120/min). Raise to 8 for production
-  (500 req/min cap).
-- **`TOKEN_ENCRYPTION_KEY` rotation** requires manual re-encryption:
-  decrypt with old key → re-encrypt with new key → update DB → update
-  env var. Downtime required.
-- **Refresh token cliff.** Inactive for >100 days → refresh token
-  expires → re-run `scripts/qbo-auth.ts`. No automatic recovery.
-- **Customer mapping required before first push.** Run
-  `POST /sync/mappings/import` first. Use `QB_DEFAULT_CUSTOMER_ID`
-  in sandbox to bypass.
-
-- **No soft-delete support.** Internal deletes are treated as QBO
-  voids. QBO has no un-void API — restore-from-delete is not supported.
-- **Partially-paid invoice guard blocks only financial fields.** When an
-  invoice has linked payments, the reconcile worker blocks changes to
-  `lineItems` and `totalAmount` only — QBO rejects those on invoices
-  with applied payments. Changes to other fields (`dueDate`, `currency`,
-  `status`, memo) are allowed through and pushed to QBO normally. The
-  guard only activates when `lastSyncedSnapshot` is set; invoices with
-  no prior sync snapshot skip the guard.
-- **Application layer imports infrastructure types.** `payment-sync.use-case.ts`
-  and `pull.use-case.ts` import structural repository types from
-  `infrastructure/database/` for their `Deps` type definitions. These
-  are type-only imports — no concrete infrastructure code executes in
-  the application layer. The strict approach would define port interfaces
-  for every repository in `domain/`, which is the intended production
-  architecture but was deferred to keep scope manageable.
-- **Same-second timestamp precision.** Two QBO edits within the same
-  second: the second webhook is dropped as stale. The reconciliation
-  job does not recover this (record shows SYNCED). Rare in practice
-  for accounting workflows.
-
----
-
-## Tradeoffs
-
-**Why qbo-to-internal initial load is not implemented**
-
-The feature requires: paginated QBO fetch (1000 records/page),
-DocNumber matching against internal IDs, a background job returning
-202 immediately, and per-invoice transactions. DocNumber is also
-user-editable in QBO — if overwritten, the match silently fails and
-creates a duplicate. This complexity, combined with the risk of
-mis-linkage, makes it the highest-effort feature relative to
-evaluation signal. The internal-to-qbo direction and the ongoing
-webhook-driven sync fully demonstrate the core bidirectional
-architecture. The intended design: paginate QBO invoices, match each by DocNumber
-against internal IDs, create a SyncLink for matches and a new internal Invoice
-for unmatched records, run as a background job returning 202 Accepted immediately.
-
-**Why AES-256-GCM encryption was kept**
-
-The suggestion to store tokens in plaintext was considered and rejected.
-These are real OAuth tokens for a real QBO sandbox company. Storing
-them in plaintext in a database — even a local dev one — is a genuine
-security risk that is trivially avoided. Node's crypto module
-implementation is ~20 lines and is not a meaningful time cost.
-
-**Why typed outbound jobs were replaced with the reconcile model**
-
-Typed jobs (`type: "push"`, `type: "void"`) cause two problems: jobId
-collision (a push and a void for the same invoice share the same
-internalId, so BullMQ silently drops one) and state races (a job
-queued as "push" may execute after the invoice was voided, sending a
-stale operation to QBO). The reconcile model eliminates both: one job
-per invoice, worker reads current state at execution time.
-
-**Why accept-internal/accept-qbo instead of field-level custom resolution**
-
-A custom strategy requires per-field validation, partial application
-logic, and a schema that must be kept in sync with the Invoice type.
-accept-internal and accept-qbo cover the real-world cases for a
-billing integration — accountants either want their version or the
-internal system's version, rarely a field-by-field merge. The conflict
-rules config handles automated field-level merging for known patterns;
-manual resolution is the fallback for genuinely ambiguous cases.
-
-**Why BullMQ jobId deduplication is not sufficient alone**
-
-BullMQ's jobId deduplication prevents duplicate waiting jobs. It does
-not prevent a new change from being silently discarded while a job for
-the same invoice is active (executing). In this case the change is
-lost until the reconciliation job re-queues it (~15 minutes later).
-Production would add a post-sync check (`invoice.updatedAt >
-jobStartedAt` → re-enqueue before exiting), but this is deferred as
-the reconciliation job provides acceptable recovery for this use case.
-
-**Why an in-process mutex instead of a Redis distributed lock for token refresh**
-
-`getValidAccessToken()` uses a `refreshPromise` field on the `QBOClient`
-singleton to ensure only one OAuth refresh runs at a time within the
-process. Without it, concurrent jobs hitting an expiring token
-simultaneously would each trigger a separate Intuit OAuth call with the
-same refresh token — Intuit refresh tokens are one-time-use, so the
-second call would fail or produce a token immediately overwritten by the
-first. A Redis `NX` lock would be required for multi-worker deployments,
-but adds TTL management and lock-release complexity that is
-disproportionate to this single-worker architecture. A production multi-worker deployment
-would replace this with a Redis SET NX PX lock on a shared key,
-with a TTL slightly longer than the Intuit refresh call timeout.
+See [DESIGN.md](./DESIGN.md) for the full design write-up: data model,
+sync engine, idempotency, conflict detection, failure handling, and
+tradeoff reasoning.
 
 ---
 

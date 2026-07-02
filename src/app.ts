@@ -4,6 +4,9 @@ import { ZodError } from "zod";
 import logger from "@/infrastructure/logger/index.js";
 import { AppError } from "@/shared/errors/app-error.js";
 
+let isHealthy = true;
+export function getHealthStatus() { return isHealthy; }
+
 export function buildApp() {
   // Cast needed: pino.Logger's child() return type is narrower than FastifyBaseLogger expects
   const app = fastify({ logger: logger as unknown as FastifyBaseLogger });
@@ -51,7 +54,8 @@ export function buildApp() {
       });
     }
 
-    app.log.error({ err: error }, "Unhandled error");
+    app.log.fatal({ err: error }, "Non-operational error — marking process unhealthy");
+    isHealthy = false;
     return reply.status(500).send({
       error: "InternalServerError",
       statusCode: 500,

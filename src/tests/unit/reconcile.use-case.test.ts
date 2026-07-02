@@ -160,6 +160,41 @@ describe("reconcileInvoice", () => {
     );
   });
 
+  it("sets syncStatus ERROR and writes AuditLog when QBO call fails", async () => {
+    const deps = makeDeps({
+      qboInvoicePort: {
+        ...makeDeps().qboInvoicePort,
+        updateInvoice: vi.fn(async () => { throw new Error("QBO timeout"); }),
+      } as QBOInvoicePort,
+    });
+    await expect(reconcileInvoice("inv-1", deps as never)).rejects.toThrow("QBO timeout");
+    expect(deps.syncLinkRepo.setStatus).toHaveBeenCalledWith("sl-1", 0, "ERROR", {});
+    expect(deps.auditLogRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "reconcile_failed", result: "FAILURE" })
+    );
+  });
+
+  it("links existing QBO invoice on duplicate create error (timeout-after-write recovery)", async () => {
+    const existingResult = makeQBOResult({ qboId: "qbo-existing", qboSyncToken: "2" });
+    const deps = makeDeps({
+      syncLinkRepo: { ...makeDeps().syncLinkRepo, findByInternalId: vi.fn(async () => null) },
+      qboInvoicePort: {
+        ...makeDeps().qboInvoicePort,
+        createInvoice: vi.fn(async () => { throw new Error("Duplicate Document Number Error, 6240"); }),
+        findByDocNumber: vi.fn(async () => existingResult),
+      } as QBOInvoicePort,
+    });
+    await reconcileInvoice("inv-1", deps as never);
+    // docNumber = internalId stripped of dashes, truncated to 20 chars → "inv1"
+    expect(deps.qboInvoicePort.findByDocNumber).toHaveBeenCalledWith("inv1");
+    expect(deps.syncLinkRepo.upsertLinked).toHaveBeenCalledWith(
+      "inv-1", "qbo-existing", "2", expect.any(Date), expect.any(Object), 0
+    );
+    expect(deps.auditLogRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "invoice_created_in_qbo", result: "SUCCESS" })
+    );
+  });
+
   it("allows update when only dueDate changed on a partially-paid invoice", async () => {
     const snapshot = {
       lineItems: [],

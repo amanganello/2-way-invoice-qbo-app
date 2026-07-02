@@ -37,6 +37,7 @@ export type QBOSyncContext = {
   accountMap: Map<string, { qboAccountId: string }>;
   docNumber: string;
   syncToken?: string;
+  defaultItemId?: string;
 };
 
 export type QBOInvoiceResult = {
@@ -73,7 +74,7 @@ export interface QBOInvoicePort {
   updateInvoice(
     qboId: string,
     invoice: Partial<Invoice>,
-    ctx: Required<QBOSyncContext>
+    ctx: QBOSyncContext & { syncToken: string }
   ): Promise<QBOInvoiceResult>;
   voidInvoice(qboId: string, syncToken: string): Promise<QBOInvoiceResult>;
   findByDocNumber(docNumber: string): Promise<QBOInvoiceResult | null>;

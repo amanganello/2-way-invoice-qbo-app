@@ -6,6 +6,8 @@ import type { SyncQueuePort } from "@/domain/invoices/invoice.types.js";
 const defaultJobOptions = {
   attempts: env.SYNC_JOB_MAX_RETRIES,
   backoff: { type: "exponential" as const, delay: 5000 },
+  removeOnComplete: true,
+  removeOnFail: true,
 };
 
 export const invoiceSyncQueue = new Queue("invoice-sync", {

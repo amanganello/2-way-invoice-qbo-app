@@ -11,7 +11,8 @@ type QueryResponse = { QueryResponse: { Invoice?: QBOInvoiceEntity[]; maxResults
 function buildLines(
   lineItems: Invoice["lineItems"],
   itemMap: QBOSyncContext["itemMap"],
-  accountMap?: QBOSyncContext["accountMap"]
+  accountMap?: QBOSyncContext["accountMap"],
+  defaultItemId?: string
 ): QBOLine[] {
   return lineItems.map((li) => {
     const mapping = li.internalItemCode ? itemMap.get(li.internalItemCode) : undefined;
@@ -26,12 +27,19 @@ function buildLines(
       throw new NotFoundError(`AccountMap missing for code: ${li.internalAccountCode}`);
     }
 
+    const itemId = mapping?.qboItemId ?? defaultItemId;
+    if (!itemId) {
+      throw new NotFoundError(
+        `No ItemMap entry for line item "${li.description}" and QB_DEFAULT_ITEM_ID is not set`
+      );
+    }
+
     return {
       Amount: li.amount,
       DetailType: "SalesItemLineDetail",
       Description: li.description,
       SalesItemLineDetail: {
-        ItemRef: { value: mapping?.qboItemId ?? "ITEM_NOT_FOUND" },
+        ItemRef: { value: itemId },
         ...(accountMapping && { AccountRef: { value: accountMapping.qboAccountId } }),
         TaxCodeRef: { value: mapping?.taxCode ?? "NON" },
         Qty: li.quantity,
@@ -93,7 +101,7 @@ export class QBOInvoiceAdapter implements QBOInvoicePort {
     const payload: QBOInvoiceEntity = {
       CustomerRef: { value: ctx.customerRef },
       DocNumber: ctx.docNumber,
-      Line: buildLines(invoice.lineItems, ctx.itemMap, ctx.accountMap),
+      Line: buildLines(invoice.lineItems, ctx.itemMap, ctx.accountMap, ctx.defaultItemId),
       DueDate: invoice.dueDate.toISOString().split("T")[0],
       CurrencyRef: { value: invoice.currency },
     };
@@ -104,14 +112,14 @@ export class QBOInvoiceAdapter implements QBOInvoicePort {
   async updateInvoice(
     qboId: string,
     invoice: Partial<Invoice>,
-    ctx: Required<QBOSyncContext>
+    ctx: QBOSyncContext & { syncToken: string }
   ): Promise<QBOInvoiceResult> {
     const payload: QBOInvoiceEntity = {
       Id: qboId,
       SyncToken: ctx.syncToken,
       CustomerRef: { value: ctx.customerRef },
       DocNumber: ctx.docNumber,
-      ...(invoice.lineItems && { Line: buildLines(invoice.lineItems, ctx.itemMap, ctx.accountMap) }),
+      ...(invoice.lineItems && { Line: buildLines(invoice.lineItems, ctx.itemMap, ctx.accountMap, ctx.defaultItemId) }),
       ...(invoice.dueDate && { DueDate: invoice.dueDate.toISOString().split("T")[0] }),
       ...(invoice.currency && { CurrencyRef: { value: invoice.currency } }),
     };

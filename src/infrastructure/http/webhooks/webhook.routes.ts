@@ -27,26 +27,30 @@ export async function registerWebhookRoutes(app: FastifyInstance): Promise<void>
   // Encapsulate in a scoped plugin so the wildcard content-type parser only applies to
   // webhook routes and does not bleed into invoice or other API routes.
   app.register(async (scope) => {
-    // Wildcard parser: handles QBO webhook probes that send no Content-Type header.
-    // Scoped to this plugin only — does not affect any other route.
-    scope.addContentTypeParser(
-      "*",
-      { parseAs: "string" },
-      (req: FastifyRequest, body: unknown, done: (err: Error | null, result?: unknown) => void) => {
-        (req as FastifyRequest & { rawBody?: string }).rawBody = body as string;
-        try {
-          done(null, JSON.parse(body as string));
-        } catch (err) {
-          done(err as Error, undefined);
-        }
+    // Register parsers for both application/json and wildcard (for QBO probes with no
+    // Content-Type). Both capture the raw string before parsing so HMAC verification
+    // uses the original bytes, not re-serialized JSON. Scoped to this plugin only.
+    const rawBodyParser = (
+      req: FastifyRequest,
+      body: unknown,
+      done: (err: Error | null, result?: unknown) => void
+    ) => {
+      (req as FastifyRequest & { rawBody?: string }).rawBody = body as string;
+      try {
+        done(null, body === "" ? {} : JSON.parse(body as string));
+      } catch (err) {
+        done(err as Error, undefined);
       }
-    );
+    };
+    scope.removeAllContentTypeParsers();
+    scope.addContentTypeParser("application/json", { parseAs: "string" }, rawBodyParser);
+    scope.addContentTypeParser("*", { parseAs: "string" }, rawBodyParser);
 
     scope.post(
       "/webhooks/qbo",
       { config: { rawBody: true } },
       async (request: FastifyRequest, reply: FastifyReply) => {
-        const signature = request.headers["intuit-signature-hash"] as string | undefined;
+        const signature = (request.headers["intuit-signature"] ?? request.headers["intuit-signature-hash"]) as string | undefined;
         const rawBody = (request as { rawBody?: string }).rawBody ?? JSON.stringify(request.body);
 
         if (!signature || !verifySignature(rawBody, signature)) {

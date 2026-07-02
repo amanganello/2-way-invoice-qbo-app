@@ -29,7 +29,7 @@ describe("Invoice routes", () => {
     vi.doMock(
       "@/infrastructure/database/invoice.repository.js",
       () => ({
-        PrismaInvoiceRepository: vi.fn(() => mockRepo),
+        PrismaInvoiceRepository: vi.fn(function() { return mockRepo; }),
       })
     );
 

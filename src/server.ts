@@ -24,6 +24,11 @@ const shutdown = async (signal: string): Promise<void> => {
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
 
+process.on("unhandledRejection", (reason) => {
+  app.log.fatal({ err: reason }, "Unhandled promise rejection");
+  process.exit(1);
+});
+
 try {
   await app.listen({ port: env.PORT, host: "0.0.0.0" });
 } catch (err) {

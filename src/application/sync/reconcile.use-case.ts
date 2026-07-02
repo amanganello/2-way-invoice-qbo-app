@@ -33,6 +33,7 @@ export type ReconcileDeps = {
   qboInvoicePort: QBOInvoicePort;
   auditLogRepo: AuditLogPort;
   qbDefaultCustomerId?: string;
+  qbDefaultItemId?: string;
   qbEnvironment: string;
 };
 
@@ -52,7 +53,7 @@ export async function reconcileInvoice(internalId: string, deps: ReconcileDeps):
     invoiceRepo, syncLinkRepo, paymentSyncLinkRepo,
     accountMapRepo, itemMapRepo, customerMapRepo,
     qboInvoicePort, auditLogRepo,
-    qbDefaultCustomerId, qbEnvironment,
+    qbDefaultCustomerId, qbDefaultItemId, qbEnvironment,
   } = deps;
 
   const sourceEventId = `reconcile-${internalId}`;
@@ -156,7 +157,9 @@ export async function reconcileInvoice(internalId: string, deps: ReconcileDeps):
       accountMap.set(code, { qboAccountId: entry.qboAccountId });
     }
 
-    const ctx: QBOSyncContext = { customerRef, itemMap, accountMap, docNumber: internalId };
+    // QBO DocNumber max length is 21 chars; UUIDs are 36. Truncate to keep it unique enough.
+    const docNumber = internalId.replace(/-/g, "").slice(0, 20);
+    const ctx: QBOSyncContext = { customerRef, itemMap, accountMap, docNumber, defaultItemId: qbDefaultItemId };
 
     // Partially-paid guard: only block lineItems/totalAmount changes.
     // Other fields (dueDate, currency, status) are allowed even on partially-paid invoices.
@@ -186,7 +189,7 @@ export async function reconcileInvoice(internalId: string, deps: ReconcileDeps):
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         if (msg.includes("6240") || msg.toLowerCase().includes("duplicate")) {
-          const existing = await qboInvoicePort.findByDocNumber(internalId);
+          const existing = await qboInvoicePort.findByDocNumber(docNumber);
           if (!existing) throw err;
           result = existing;
         } else {
@@ -196,7 +199,7 @@ export async function reconcileInvoice(internalId: string, deps: ReconcileDeps):
       const newLink = await syncLinkRepo.upsertLinked(
         internalId, result.qboId, result.qboSyncToken, result.qboUpdatedAt,
         invoiceToSnapshot(invoice),
-        0 // no existing sync link to conflict with
+        syncLink?.version ?? 0
       );
       await auditLogRepo.create({
         syncLinkId: newLink.id,
@@ -206,12 +209,30 @@ export async function reconcileInvoice(internalId: string, deps: ReconcileDeps):
         afterState: { qboId: result.qboId },
       });
     } else {
-      const result = await qboInvoicePort.updateInvoice(
-        syncLink!.qboId!, invoice, { ...ctx, syncToken: syncLink!.qboSyncToken ?? "0" }
-      );
+      let updateResult;
+      try {
+        updateResult = await qboInvoicePort.updateInvoice(
+          syncLink!.qboId!, invoice, { ...ctx, syncToken: syncLink!.qboSyncToken ?? "0" }
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.toLowerCase().includes("stale object") || msg.toLowerCase().includes("stale")) {
+          // QBO was updated externally since our last sync — refresh the SyncToken and
+          // reset to PENDING. The pull worker (enqueued when QBO fired its webhook) will
+          // run conflict detection and set CONFLICT or apply the merged result.
+          const fresh = await qboInvoicePort.getInvoice(syncLink!.qboId!);
+          await syncLinkRepo.setStatus(syncLink!.id, syncLink!.version, "PENDING", {
+            qboSyncToken: fresh.qboSyncToken,
+            qboUpdatedAt: fresh.qboUpdatedAt,
+          });
+          logger.warn({ internalId, qboId: syncLink!.qboId }, "reconcileInvoice: stale SyncToken — refreshed from QBO, reset to PENDING for pull worker");
+          return;
+        }
+        throw err;
+      }
       await syncLinkRepo.setStatus(syncLink!.id, syncLink!.version, "SYNCED", {
-        qboSyncToken: result.qboSyncToken,
-        qboUpdatedAt: result.qboUpdatedAt,
+        qboSyncToken: updateResult.qboSyncToken,
+        qboUpdatedAt: updateResult.qboUpdatedAt,
         lastSyncedSnapshot: invoiceToSnapshot(invoice),
         lastSyncedAt: new Date(),
       });
@@ -220,7 +241,7 @@ export async function reconcileInvoice(internalId: string, deps: ReconcileDeps):
         action: "invoice_updated_in_qbo",
         sourceEventId,
         result: "SUCCESS",
-        afterState: { qboId: result.qboId },
+        afterState: { qboId: updateResult.qboId },
       });
     }
   } catch (err) {

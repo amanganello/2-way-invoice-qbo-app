@@ -30,6 +30,6 @@ export class ConflictError extends AppError {
 
 export class ExternalServiceError extends AppError {
   constructor(message = "External service error") {
-    super(502, message, false);
+    super(502, message, true);
   }
 }
