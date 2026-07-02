@@ -155,21 +155,6 @@ paid invoice blocking.
 
 ---
 
-## Webhook Setup
-
-QBO webhooks require a public URL. For local development:
-
-```bash
-ngrok http 3000
-```
-
-Set the ngrok URL as your webhook endpoint in the QBO developer portal:
-`https://<ngrok-id>.ngrok-free.dev/webhooks/qbo`
-
-Copy the Verifier Token from the portal into `QB_WEBHOOK_VERIFIER_TOKEN`.
-
----
-
 ## Environment Variables
 
 ```env
