@@ -1,18 +1,29 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { z } from "zod";
 import { env } from "@/config/env.js";
 import { prisma } from "@/infrastructure/database/prisma.js";
 import { invoiceSyncQueue } from "@/infrastructure/queue/queues.js";
 import { redisConnection } from "@/infrastructure/queue/redis.js";
 import logger from "@/infrastructure/logger/index.js";
 
-type QBOEntity = { name: string; id: string; operation: string; lastUpdated: string };
-type QBOWebhookPayload = {
-  eventNotifications: Array<{
-    realmId: string;
-    dataChangeEvent: { entities: QBOEntity[] };
-  }>;
-};
+const QBOEntitySchema = z.object({
+  name: z.string(),
+  id: z.string(),
+  operation: z.string(),
+  lastUpdated: z.string(),
+});
+
+const QBOWebhookPayloadSchema = z.object({
+  eventNotifications: z.array(
+    z.object({
+      realmId: z.string(),
+      dataChangeEvent: z.object({
+        entities: z.array(QBOEntitySchema),
+      }),
+    })
+  ),
+});
 
 function verifySignature(body: string, signature: string): boolean {
   const expected = createHmac("sha256", env.QB_WEBHOOK_VERIFIER_TOKEN).update(body).digest("base64");
@@ -64,8 +75,12 @@ export async function registerWebhookRoutes(app: FastifyInstance): Promise<void>
           return reply.status(503).send({ error: "Queue unavailable" });
         }
 
-        const payload = request.body as QBOWebhookPayload;
-        const entities = payload.eventNotifications.flatMap(
+        const parsed = QBOWebhookPayloadSchema.safeParse(request.body);
+        if (!parsed.success) {
+          logger.warn({ err: parsed.error.flatten() }, "Invalid QBO webhook payload shape");
+          return reply.status(400).send({ error: "Invalid payload" });
+        }
+        const entities = parsed.data.eventNotifications.flatMap(
           n => n.dataChangeEvent.entities
         );
 
