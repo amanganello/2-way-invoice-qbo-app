@@ -1,3 +1,6 @@
+packages:
+  - "client"
+
 overrides:
   ioredis: "5.11.1"
 
