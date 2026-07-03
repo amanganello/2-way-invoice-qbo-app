@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { getSyncLinks, getSyncLink } from '../lib/api'
 import type { SyncLink, SyncLinkDetail } from '../lib/api'
 import { usePolling } from '../lib/usePolling'
@@ -14,10 +14,16 @@ export function SyncLinks() {
   const [selected, setSelected] = useState<SyncLinkDetail | null>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
 
-  const { data, error, loading } = usePolling(
+  const { data, error, loading, refresh } = usePolling(
     () => getSyncLinks(filter !== 'ALL' ? { syncStatus: filter } : undefined),
     5000
   )
+
+  // Immediately refetch when the filter tab changes; without this, the stale
+  // data from the previous filter stays visible for up to the poll interval.
+  useEffect(() => {
+    refresh()
+  }, [filter, refresh])
 
   async function openDetail(link: SyncLink) {
     setLoadingDetail(true)

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { getConflicts, resolveConflict } from '../lib/api'
+import { useState, useEffect } from 'react'
+import { getConflicts, resolveConflict, getSyncLink } from '../lib/api'
 import type { SyncLink } from '../lib/api'
 import { usePolling } from '../lib/usePolling'
 import { Spinner } from '../components/Spinner'
@@ -9,6 +9,21 @@ export function Conflicts() {
   const { data, error, loading, refresh } = usePolling(getConflicts, 5000)
   const [resolving, setResolving] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [auditActions, setAuditActions] = useState<Map<string, string>>(new Map())
+
+  useEffect(() => {
+    if (!data) return
+    data.forEach(link => {
+      getSyncLink(link.id)
+        .then(detail => {
+          const lastLog = detail.auditLogs[detail.auditLogs.length - 1]
+          setAuditActions(prev => new Map(prev).set(link.id, lastLog?.action ?? '—'))
+        })
+        .catch(() => {
+          setAuditActions(prev => new Map(prev).set(link.id, '—'))
+        })
+    })
+  }, [data])
 
   async function handleResolve(link: SyncLink, strategy: 'accept-internal' | 'accept-qbo') {
     setResolving(link.id)
@@ -45,6 +60,7 @@ export function Conflicts() {
                 <th className="px-4 py-2 text-left font-medium text-gray-500">Internal ID</th>
                 <th className="px-4 py-2 text-left font-medium text-gray-500">QBO ID</th>
                 <th className="px-4 py-2 text-left font-medium text-gray-500">Last Synced</th>
+                <th className="px-4 py-2 text-left font-medium text-gray-500">Last Audit Action</th>
                 <th className="px-4 py-2 text-left font-medium text-gray-500">Actions</th>
               </tr>
             </thead>
@@ -55,6 +71,9 @@ export function Conflicts() {
                   <td className="px-4 py-2 font-mono text-xs text-gray-500">{link.qboId ?? '—'}</td>
                   <td className="px-4 py-2 text-gray-500">
                     {link.lastSyncedAt ? new Date(link.lastSyncedAt).toLocaleString() : '—'}
+                  </td>
+                  <td className="px-4 py-2 font-mono text-xs text-gray-700">
+                    {auditActions.get(link.id) ?? '—'}
                   </td>
                   <td className="px-4 py-2">
                     <div className="flex gap-2">

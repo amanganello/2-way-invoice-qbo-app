@@ -18,7 +18,6 @@ const EMPTY_BODY: CreateInvoiceBody = {
 export function Invoices() {
   const { data: syncLinks } = usePolling(getSyncLinks, 5000)
   const [invoices, setInvoices] = useState<Invoice[]>([])
-  const [loadingList] = useState(false)
   const [modal, setModal] = useState<{ mode: 'create' | 'update'; invoice?: Invoice } | null>(null)
   const [form, setForm] = useState<CreateInvoiceBody>(EMPTY_BODY)
   const [saving, setSaving] = useState(false)
@@ -107,9 +106,7 @@ export function Invoices() {
 
       {error && <ErrorBanner message={error} />}
 
-      {loadingList ? (
-        <div className="flex justify-center p-8"><Spinner /></div>
-      ) : invoices.length === 0 ? (
+      {invoices.length === 0 ? (
         <p className="text-sm text-gray-500">No invoices yet. Create one above.</p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-gray-200">
@@ -217,13 +214,15 @@ export function Invoices() {
                   <button onClick={addLine} className="text-xs text-blue-600 hover:underline">+ Add</button>
                 </div>
                 {form.lineItems.map((line, i) => (
-                  <div key={i} className="mb-2 grid grid-cols-5 gap-1 text-xs">
+                  <div key={i} className="mb-2 grid grid-cols-6 gap-1 text-xs">
                     <input placeholder="Description" className="input col-span-2" value={line.description}
                       onChange={e => updateLine(i, 'description', e.target.value)} />
                     <input type="number" placeholder="Qty" className="input" value={line.quantity}
                       onChange={e => updateLine(i, 'quantity', Number(e.target.value))} />
                     <input type="number" placeholder="Unit $" className="input" value={line.unitPrice}
                       onChange={e => updateLine(i, 'unitPrice', Number(e.target.value))} />
+                    <input type="number" placeholder="Amount" className="input" value={line.amount}
+                      onChange={e => updateLine(i, 'amount', Number(e.target.value))} />
                     <button onClick={() => removeLine(i)} className="text-red-500 hover:text-red-700">✕</button>
                   </div>
                 ))}
