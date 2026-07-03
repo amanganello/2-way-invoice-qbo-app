@@ -85,50 +85,50 @@ async function req<T>(method: string, path: string, body?: unknown, apiKey?: str
   return res.json() as Promise<T>
 }
 
-export function getHealth() {
-  return req<{ status: string; timestamp: string }>('GET', '/health')
+export function getHealth(apiKey?: string) {
+  return req<{ status: string; timestamp: string }>('GET', '/health', undefined, apiKey)
 }
 
-export function getAuthStatus() {
-  return req<{ valid: boolean; expiresAt: string; refreshTokenExpiresAt: string; refreshTokenExpiringSoon: boolean }>('GET', '/auth/qbo/status')
+export function getAuthStatus(apiKey?: string) {
+  return req<{ valid: boolean; expiresAt: string; refreshTokenExpiresAt: string; refreshTokenExpiringSoon: boolean }>('GET', '/auth/qbo/status', undefined, apiKey)
 }
 
-export function createInvoice(body: CreateInvoiceBody) {
-  return req<Invoice>('POST', '/invoices', body)
+export function createInvoice(body: CreateInvoiceBody, apiKey?: string) {
+  return req<Invoice>('POST', '/invoices', body, apiKey)
 }
 
-export function updateInvoice(id: string, body: Partial<CreateInvoiceBody>) {
-  return req<Invoice>('PATCH', `/invoices/${id}`, body)
+export function updateInvoice(id: string, body: Partial<CreateInvoiceBody>, apiKey?: string) {
+  return req<Invoice>('PATCH', `/invoices/${id}`, body, apiKey)
 }
 
-export function getSyncLinks(params?: { syncStatus?: string; limit?: number }) {
+export function getSyncLinks(params?: { syncStatus?: string; limit?: number }, apiKey?: string) {
   const qs = new URLSearchParams()
   if (params?.syncStatus !== undefined) qs.set('syncStatus', params.syncStatus)
   if (params?.limit !== undefined) qs.set('limit', String(params.limit))
   const query = qs.toString()
-  return req<SyncLink[]>('GET', `/sync/links${query ? `?${query}` : ''}`)
+  return req<SyncLink[]>('GET', `/sync/links${query ? `?${query}` : ''}`, undefined, apiKey)
 }
 
-export function getSyncLink(id: string) {
-  return req<SyncLinkDetail>('GET', `/sync/links/${id}`)
+export function getSyncLink(id: string, apiKey?: string) {
+  return req<SyncLinkDetail>('GET', `/sync/links/${id}`, undefined, apiKey)
 }
 
-export function getConflicts() {
-  return req<SyncLink[]>('GET', '/sync/conflicts')
+export function getConflicts(apiKey?: string) {
+  return req<SyncLink[]>('GET', '/sync/conflicts', undefined, apiKey)
 }
 
-export function resolveConflict(id: string, strategy: 'accept-internal' | 'accept-qbo') {
-  return req<{ ok: boolean; strategy: string; internalId: string }>('POST', `/sync/conflicts/${id}/resolve`, { strategy })
+export function resolveConflict(id: string, strategy: 'accept-internal' | 'accept-qbo', apiKey?: string) {
+  return req<{ ok: boolean; strategy: string; internalId: string }>('POST', `/sync/conflicts/${id}/resolve`, { strategy }, apiKey)
 }
 
-export function importMappings() {
-  return req<{ accountsImported: number; itemsImported: number; customersImported: number }>('POST', '/sync/mappings/import')
+export function importMappings(apiKey?: string) {
+  return req<{ accountsImported: number; itemsImported: number; customersImported: number }>('POST', '/sync/mappings/import', undefined, apiKey)
 }
 
-export function getMappings() {
-  return req<{ accounts: AccountMap[]; items: ItemMap[]; customers: CustomerMap[] }>('GET', '/sync/mappings')
+export function getMappings(apiKey?: string) {
+  return req<{ accounts: AccountMap[]; items: ItemMap[]; customers: CustomerMap[] }>('GET', '/sync/mappings', undefined, apiKey)
 }
 
-export function triggerInitialLoad() {
-  return req<{ enqueued: number; skipped: number }>('POST', '/sync/initial-load/internal-to-qbo')
+export function triggerInitialLoad(apiKey?: string) {
+  return req<{ enqueued: number; skipped: number }>('POST', '/sync/initial-load/internal-to-qbo', undefined, apiKey)
 }
