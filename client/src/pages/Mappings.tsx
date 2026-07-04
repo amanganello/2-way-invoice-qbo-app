@@ -58,19 +58,19 @@ export function Mappings() {
           <Section title={`Accounts (${data.accounts.length})`} open={accounts.open} onToggle={accounts.toggle}>
             <Table
               headers={['Internal Code', 'QBO Account ID', 'Name']}
-              rows={data.accounts.map(a => [a.internalCode, a.qboAccountId, a.name])}
+              rows={data.accounts.map(a => [a.internalAccountCode, a.qboAccountId, a.qboAccountName])}
             />
           </Section>
           <Section title={`Items (${data.items.length})`} open={items.open} onToggle={items.toggle}>
             <Table
               headers={['Internal Item Code', 'QBO Item ID', 'Name', 'Tax Code']}
-              rows={data.items.map(i => [i.internalItemCode, i.qboItemId, i.name, i.taxCode ?? '—'])}
+              rows={data.items.map(i => [i.internalItemCode, i.qboItemId, i.qboItemName, i.defaultTaxCode])}
             />
           </Section>
           <Section title={`Customers (${data.customers.length})`} open={customers.open} onToggle={customers.toggle}>
             <Table
               headers={['Internal Customer ID', 'QBO Customer ID', 'Name']}
-              rows={data.customers.map(c => [c.internalCustomerId, c.qboCustomerId, c.name])}
+              rows={data.customers.map(c => [c.internalCustomerId, c.qboCustomerId, c.qboCustomerName])}
             />
           </Section>
         </div>

@@ -13,7 +13,6 @@ const app = buildApp();
 await app.register(fastifyStatic, {
   root: join(__dirname, '..', 'client', 'dist'),
   prefix: '/',
-  decorateReply: false,
 })
 // Serve index.html for the root route
 app.get('/', async (_req, reply) => {

@@ -5,7 +5,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 
 # Install dependencies
 FROM base AS deps
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 # Build
@@ -14,8 +14,6 @@ COPY tsconfig.json ./
 COPY prisma ./prisma
 COPY src ./src
 # Add client build
-COPY client/package.json client/pnpm-lock.yaml ./client/
-RUN cd client && pnpm install --frozen-lockfile
 COPY client ./client
 RUN cd client && pnpm build
 # Build API

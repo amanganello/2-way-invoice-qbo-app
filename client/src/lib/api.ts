@@ -52,22 +52,22 @@ export interface SyncLinkDetail extends SyncLink {
 }
 
 export interface AccountMap {
-  internalCode: string
+  internalAccountCode: string
   qboAccountId: string
-  name: string
+  qboAccountName: string
 }
 
 export interface ItemMap {
   internalItemCode: string
   qboItemId: string
-  name: string
-  taxCode: string | null
+  qboItemName: string
+  defaultTaxCode: string
 }
 
 export interface CustomerMap {
   internalCustomerId: string
   qboCustomerId: string
-  name: string
+  qboCustomerName: string
 }
 
 function getHeaders(apiKey?: string): HeadersInit {
