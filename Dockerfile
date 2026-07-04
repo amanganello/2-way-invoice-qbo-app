@@ -15,6 +15,7 @@ COPY prisma ./prisma
 COPY src ./src
 # Add client build
 COPY client ./client
+RUN pnpm install --frozen-lockfile
 RUN cd client && pnpm build
 # Build API
 RUN pnpm exec tsc --project tsconfig.json
