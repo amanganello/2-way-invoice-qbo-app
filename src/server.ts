@@ -2,8 +2,23 @@ import { env } from "@/config/env.js";
 import { buildApp } from "@/app.js";
 import { registerRoutes } from "@/infrastructure/http/routes.js";
 import { prisma } from "@/infrastructure/database/prisma.js";
+import fastifyStatic from '@fastify/static'
+import { fileURLToPath } from 'node:url'
+import { join, dirname } from 'node:path'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const app = buildApp();
+
+await app.register(fastifyStatic, {
+  root: join(__dirname, '..', 'client', 'dist'),
+  prefix: '/',
+  decorateReply: false,
+})
+// Serve index.html for the root route
+app.get('/', async (_req, reply) => {
+  return reply.sendFile('index.html')
+})
 
 await registerRoutes(app);
 
