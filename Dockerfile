@@ -19,7 +19,7 @@ RUN cd client && pnpm install --frozen-lockfile
 COPY client ./client
 RUN cd client && pnpm build
 # Build API
-RUN pnpm build
+RUN pnpm exec tsc --project tsconfig.json
 RUN pnpm prisma generate
 
 # Production image
