@@ -16,7 +16,8 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "lint": "eslint src --ext .ts",
     "worker": "node --env-file=.env --import tsx/esm src/worker.ts",
-    "qbo-auth": "node --env-file=.env --import tsx/esm scripts/qbo-auth.ts"
+    "qbo-auth": "node --env-file=.env --import tsx/esm scripts/qbo-auth.ts",
+    "migrate": "prisma migrate deploy"
   },
   "dependencies": {
     "@fastify/sensible": "^5.6.0",

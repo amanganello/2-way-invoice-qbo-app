@@ -280,6 +280,20 @@ tradeoff reasoning.
 
 ---
 
+## Deploying to Railway
+
+1. Push repo to GitHub
+2. Create new Railway project → "Deploy from GitHub repo"
+3. Add Postgres plugin → DATABASE_URL set automatically
+4. Add Redis plugin → REDIS_URL set automatically
+5. Set env vars (QB_CLIENT_ID, QB_CLIENT_SECRET, QB_REALM_ID, QB_WEBHOOK_VERIFIER_TOKEN, QB_REDIRECT_URI, TOKEN_ENCRYPTION_KEY, API_KEY, QB_ENVIRONMENT=sandbox)
+6. Set deploy command: `pnpm migrate`
+7. Add second Railway service (`worker`) from same repo, override start command to `node dist/worker.js`
+8. Run `pnpm qbo-auth` locally pointing QB_REDIRECT_URI at Railway domain to get initial tokens
+9. Set QBO webhook endpoint to `https://<web-service>.railway.app/webhooks/qbo`
+
+---
+
 ## Debugging
 
 **Sync failures:** check `GET /sync/links?syncStatus=ERROR` to list failed
