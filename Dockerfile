@@ -13,6 +13,12 @@ FROM deps AS build
 COPY tsconfig.json ./
 COPY prisma ./prisma
 COPY src ./src
+# Add client build
+COPY client/package.json client/pnpm-lock.yaml ./client/
+RUN cd client && pnpm install --frozen-lockfile
+COPY client ./client
+RUN cd client && pnpm build
+# Build API
 RUN pnpm build
 RUN pnpm prisma generate
 
@@ -26,6 +32,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/client/dist ./client/dist
 COPY --from=build /app/node_modules/.pnpm/@prisma+client*/node_modules/@prisma/client/runtime ./node_modules/@prisma/client/runtime
 COPY prisma ./prisma
 RUN pnpm prisma generate

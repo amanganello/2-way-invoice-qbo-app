@@ -5,3 +5,5 @@ node_modules/
 .pnpm-store/
 .claude/
 *.log
+client/dist/
+client/node_modules/

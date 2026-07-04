@@ -9,7 +9,8 @@
   },
   "scripts": {
     "dev": "node --env-file=.env --import tsx/esm --watch src/server.ts",
-    "build": "tsc --project tsconfig.json",
+    "build:client": "cd client && pnpm install --frozen-lockfile && pnpm build",
+    "build": "pnpm build:client && tsc --project tsconfig.json",
     "start": "node --env-file=.env dist/server.js",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
