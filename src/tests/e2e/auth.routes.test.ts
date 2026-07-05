@@ -117,8 +117,8 @@ describe("Auth routes", () => {
     // Initiate flow to plant a valid state in pendingStates
     await app.inject({ method: "GET", url: "/auth/qbo/start?apiKey=test-api-key" });
     // The start handler calls client.authorizeUri({ scope, state }) — capture state from mock args
-    const startCallArgs = mockAuthorizeUri.mock.calls.at(-1)?.[0] as { state: string };
-    const state = startCallArgs.state;
+    const calls = mockAuthorizeUri.mock.calls as unknown as Array<[{ state: string }]>;
+    const state = calls.at(-1)![0].state;
 
     const res = await app.inject({
       method: "GET",
