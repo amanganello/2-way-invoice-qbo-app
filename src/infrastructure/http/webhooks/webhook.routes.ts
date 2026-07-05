@@ -91,8 +91,8 @@ export async function registerWebhookRoutes(app: FastifyInstance): Promise<void>
           try {
             await invoiceSyncQueue.add(
               "pull",
-              { qboId: entity.id, eventType: entity.operation, eventId },
-              { jobId: `pull-${entity.id}` }
+              { qboId: entity.id, entityType: entity.name, eventType: entity.operation, eventId },
+              { jobId: `pull-${entity.name}-${entity.id}` }
             );
           } catch (err) {
             logger.error({ err, qboId: entity.id, eventId }, "Failed to enqueue pull job");

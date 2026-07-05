@@ -64,8 +64,8 @@ describe("POST /webhooks/qbo", () => {
     expect(res.statusCode).toBe(200);
     expect(mockQueue.add).toHaveBeenCalledWith(
       "pull",
-      expect.objectContaining({ qboId: "qbo-123" }),
-      expect.objectContaining({ jobId: "pull-qbo-123" })
+      expect.objectContaining({ qboId: "qbo-123", entityType: "Invoice" }),
+      expect.objectContaining({ jobId: "pull-Invoice-qbo-123" })
     );
   });
 
@@ -81,8 +81,8 @@ describe("POST /webhooks/qbo", () => {
     // Job is enqueued BEFORE checking for duplicates; BullMQ jobId dedup prevents actual duplication
     expect(mockQueue.add).toHaveBeenCalledWith(
       "pull",
-      expect.objectContaining({ qboId: "qbo-123" }),
-      expect.objectContaining({ jobId: "pull-qbo-123" })
+      expect.objectContaining({ qboId: "qbo-123", entityType: "Invoice" }),
+      expect.objectContaining({ jobId: "pull-Invoice-qbo-123" })
     );
   });
 
