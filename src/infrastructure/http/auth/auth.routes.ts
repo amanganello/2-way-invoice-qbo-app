@@ -3,12 +3,25 @@ import { randomUUID } from "node:crypto";
 import OAuthClient from "intuit-oauth";
 import { env } from "@/config/env.js";
 import { qboCredentialsRepository } from "@/infrastructure/database/qbo-credentials.repository.js";
+import { redisConnection } from "@/infrastructure/queue/redis.js";
 import logger from "@/infrastructure/logger/index.js";
 
 const REFRESH_TOKEN_WARN_DAYS = 14;
+const OAUTH_STATE_TTL_SECONDS = 10 * 60;
 
-type StateEntry = { expiresAt: number; frontendUrl: string };
-const pendingStates = new Map<string, StateEntry>();
+type StateEntry = { frontendUrl: string };
+
+async function storeOAuthState(state: string, entry: StateEntry): Promise<void> {
+  await redisConnection.set(`oauth:state:${state}`, JSON.stringify(entry), "EX", OAUTH_STATE_TTL_SECONDS);
+}
+
+async function consumeOAuthState(state: string): Promise<StateEntry | null> {
+  const key = `oauth:state:${state}`;
+  const raw = await redisConnection.get(key);
+  if (!raw) return null;
+  await redisConnection.del(key);
+  return JSON.parse(raw) as StateEntry;
+}
 
 function makeOAuthClient() {
   return new OAuthClient({
@@ -53,7 +66,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.get("/auth/qbo/start", async (_request: FastifyRequest, reply: FastifyReply) => {
     const state = randomUUID();
     const frontendUrl = env.FRONTEND_URL;
-    pendingStates.set(state, { expiresAt: Date.now() + 10 * 60 * 1000, frontendUrl });
+    await storeOAuthState(state, { frontendUrl });
 
     const client = makeOAuthClient();
     const authUri = client.authorizeUri({
@@ -68,12 +81,10 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.get("/auth/qbo/callback", async (request: FastifyRequest, reply: FastifyReply) => {
     const { code, state, realmId } = request.query as Record<string, string>;
 
-    const entry = pendingStates.get(state ?? "");
-    if (!entry || Date.now() > entry.expiresAt) {
-      pendingStates.delete(state ?? "");
+    const entry = await consumeOAuthState(state ?? "");
+    if (!entry) {
       return reply.status(400).send({ error: "Invalid or expired OAuth state" });
     }
-    pendingStates.delete(state);
 
     const { frontendUrl } = entry;
 
