@@ -38,6 +38,11 @@ export class PrismaInvoiceRepository implements InvoiceRepository {
     return row ? toDomain(row) : null;
   }
 
+  async findAll(): Promise<Invoice[]> {
+    const rows = await prisma.invoice.findMany({ orderBy: { createdAt: 'desc' } });
+    return rows.map(toDomain);
+  }
+
   async save(invoice: Invoice): Promise<Invoice> {
     const data = {
       customerId: invoice.customerId,

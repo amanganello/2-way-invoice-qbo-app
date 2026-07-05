@@ -70,10 +70,13 @@ pnpm prisma migrate deploy
 
 ### 5. Authenticate with QuickBooks
 
-This is a one-time step that stores encrypted OAuth tokens in the database.
-Ensure `QB_REDIRECT_URI=http://localhost:3000/callback` is set in `.env`
-and that nothing else is running on port 3000 — the auth script starts its
-own temporary server to capture the callback.
+Set `QB_REDIRECT_URI=http://localhost:3000/auth/qbo/callback` in `.env` and
+register the same URL in the QBO developer portal (your app → Keys & OAuth →
+Redirect URIs). Also set `FRONTEND_URL=http://localhost:5173` so the callback
+redirects back to the Vite dev server after authorization.
+
+**Initial token acquisition** — run this once before starting the service for
+the first time, and make sure nothing else is using port 3000:
 
 ```bash
 pnpm qbo-auth
@@ -81,6 +84,11 @@ pnpm qbo-auth
 
 Open the printed URL in a browser and complete the OAuth consent. The
 terminal will confirm when tokens are saved and print their expiry times.
+
+**Subsequent re-authentication** — once the service and frontend are running,
+open the frontend Auth tab and click **Reconnect QBO**. No terminal access
+required. The browser will complete the OAuth flow and redirect back to the
+app with a success confirmation.
 
 ### 6. Configure webhook delivery
 
@@ -138,8 +146,10 @@ without per-line item mapping, set these two shortcuts in `.env`
   find a valid item ID by checking `GET /sync/mappings` after import and
   copying any `.items[0].qboItemId`
 
-If you get a `502 QBO token refresh failed` error, re-run `pnpm qbo-auth`
-to get fresh tokens and retry.
+If you get a `502 QBO token refresh failed` error, open the frontend Auth tab
+and click **Reconnect QBO** to get fresh tokens, then retry. If the frontend
+is not available, run `pnpm qbo-auth` as a fallback (stop `pnpm dev` first —
+both use port 3000).
 
 ---
 
@@ -181,7 +191,7 @@ PORT=3000
 # QBO OAuth
 QB_CLIENT_ID=               # from QBO developer portal
 QB_CLIENT_SECRET=           # from QBO developer portal
-QB_REDIRECT_URI=            # OAuth callback — only needed for qbo-auth.ts script
+QB_REDIRECT_URI=            # http://localhost:3000/auth/qbo/callback (dev) or https://<domain>/auth/qbo/callback (prod)
 QB_ENVIRONMENT=sandbox      # sandbox | production
 QB_REALM_ID=                # QBO company ID (shown after OAuth)
 QB_WEBHOOK_VERIFIER_TOKEN=  # from QBO developer portal webhook settings
@@ -193,6 +203,7 @@ TOKEN_ENCRYPTION_KEY=       # 32-byte hex: openssl rand -hex 32
 
 # API auth
 API_KEY=                    # shared secret for Bearer token on all sync endpoints
+FRONTEND_URL=               # http://localhost:5173 (dev) or https://<domain> (prod); defaults to / if unset
 
 # Redis
 REDIS_URL=redis://localhost:6379
@@ -219,6 +230,11 @@ All endpoints except `POST /webhooks/qbo` require:
 
 - `GET /auth/qbo/status` — returns QBO credential validity, expiry,
   and refresh token warning
+- `GET /auth/qbo/start` — initiates the browser OAuth flow; redirects to
+  QBO consent page. Requires API key via `?apiKey=` query param.
+- `GET /auth/qbo/callback` — OAuth callback from QBO; exchanges code for
+  tokens, saves them, redirects to `FRONTEND_URL?auth=success` (or
+  `?auth=error&message=...` on failure). No API key required.
 
 ### Webhooks
 
@@ -267,8 +283,10 @@ All endpoints except `POST /webhooks/qbo` require:
   `QBO_RATE_LIMIT_MAX` defaults to 2/second to stay within that cap.
 - `TOKEN_ENCRYPTION_KEY` is managed out of band and never stored in
   the database. Rotation requires manual re-encryption.
-- If the service is inactive for more than 100 days, the QBO refresh
-  token expires and `pnpm qbo-auth` must be re-run.
+- If the service is inactive for more than 100 days, the QBO refresh token
+  expires. Re-authenticate via the frontend Auth tab (**Reconnect QBO**) or,
+  if the frontend is unavailable, by running `pnpm qbo-auth` (stop `pnpm dev`
+  first).
 
 ---
 

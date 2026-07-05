@@ -1,1 +1,1 @@
-{"root":["./src/main.tsx"],"version":"5.9.3"}
+{"root":["./src/app.tsx","./src/main.tsx","./src/components/errorbanner.tsx","./src/components/jsonviewer.tsx","./src/components/spinner.tsx","./src/components/statusbadge.tsx","./src/lib/api.ts","./src/lib/usepolling.ts","./src/pages/authstatus.tsx","./src/pages/conflicts.tsx","./src/pages/invoices.tsx","./src/pages/mappings.tsx","./src/pages/synclinks.tsx"],"version":"5.9.3"}

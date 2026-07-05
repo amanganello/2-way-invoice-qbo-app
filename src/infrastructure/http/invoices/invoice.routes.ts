@@ -17,6 +17,11 @@ export async function registerInvoiceRoutes(app: FastifyInstance): Promise<void>
   const repo = new PrismaInvoiceRepository();
   const paymentRepo = new PrismaPaymentRepository();
 
+  app.get("/invoices", async (_request: FastifyRequest, reply: FastifyReply) => {
+    const invoices = await repo.findAll();
+    return reply.status(200).send(invoices);
+  });
+
   app.post("/invoices", async (request: FastifyRequest, reply: FastifyReply) => {
     const body = CreateInvoiceSchema.parse(request.body);
     const invoice = await createInvoice(body, repo, syncQueue);

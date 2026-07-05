@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { getMappings, importMappings } from '../lib/api'
+import { getMappings, importMappings, triggerInitialLoad } from '../lib/api'
 import { usePolling } from '../lib/usePolling'
 import { Spinner } from '../components/Spinner'
 import { ErrorBanner } from '../components/ErrorBanner'
@@ -13,6 +13,8 @@ export function Mappings() {
   const { data, error, loading, refresh } = usePolling(getMappings, 60000)
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<string | null>(null)
+  const [loadingInitial, setLoadingInitial] = useState(false)
+  const [initialLoadResult, setInitialLoadResult] = useState<string | null>(null)
   const accounts = useCollapse(true)
   const items = useCollapse(true)
   const customers = useCollapse(true)
@@ -31,19 +33,46 @@ export function Mappings() {
     }
   }
 
+  async function handleInitialLoad() {
+    setLoadingInitial(true)
+    setInitialLoadResult(null)
+    try {
+      const result = await triggerInitialLoad()
+      setInitialLoadResult(`Initial load: ${result.enqueued} enqueued, ${result.skipped} skipped`)
+    } catch (e) {
+      setInitialLoadResult(`Error: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setLoadingInitial(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">QBO Mappings</h2>
-        <button
-          onClick={() => void handleImport()}
-          disabled={importing}
-          className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-        >
-          {importing && <Spinner />}
-          Import from QBO
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => void handleInitialLoad()}
+            disabled={loadingInitial}
+            className="flex items-center gap-2 rounded-md bg-gray-600 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+          >
+            {loadingInitial && <Spinner />}
+            Initial Load
+          </button>
+          <button
+            onClick={() => void handleImport()}
+            disabled={importing}
+            className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {importing && <Spinner />}
+            Import from QBO
+          </button>
+        </div>
       </div>
+
+      {initialLoadResult && (
+        <div className="rounded-md bg-gray-50 p-3 text-sm text-gray-800">{initialLoadResult}</div>
+      )}
 
       {importResult && (
         <div className="rounded-md bg-blue-50 p-3 text-sm text-blue-800">{importResult}</div>

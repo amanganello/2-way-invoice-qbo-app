@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { createInvoice, updateInvoice, getSyncLinks } from '../lib/api'
-import type { Invoice, LineItem, CreateInvoiceBody, SyncLink } from '../lib/api'
+import { useState, useEffect } from 'react'
+import { getInvoices, createInvoice, updateInvoice, getSyncLinks, getMappings } from '../lib/api'
+import type { Invoice, LineItem, CreateInvoiceBody, SyncLink, CustomerMap } from '../lib/api'
 import { usePolling } from '../lib/usePolling'
 import { StatusBadge } from '../components/StatusBadge'
 import { Spinner } from '../components/Spinner'
@@ -17,16 +17,21 @@ const EMPTY_BODY: CreateInvoiceBody = {
 
 export function Invoices() {
   const { data: syncLinks } = usePolling(getSyncLinks, 5000)
-  const [invoices, setInvoices] = useState<Invoice[]>([])
+  const { data: invoices, loading: invoicesLoading, refresh: refreshInvoices } = usePolling(getInvoices, 10000)
   const [modal, setModal] = useState<{ mode: 'create' | 'update'; invoice?: Invoice } | null>(null)
   const [form, setForm] = useState<CreateInvoiceBody>(EMPTY_BODY)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmVoid, setConfirmVoid] = useState<Invoice | null>(null)
+  const [customers, setCustomers] = useState<CustomerMap[]>([])
 
   const syncLinkByInternalId = new Map<string, SyncLink>(
     (syncLinks ?? []).map(sl => [sl.internalId, sl])
   )
+
+  useEffect(() => {
+    getMappings().then(m => setCustomers(m.customers)).catch(() => {})
+  }, [])
 
   function openCreate() {
     setForm(EMPTY_BODY)
@@ -66,13 +71,13 @@ export function Invoices() {
     setSaving(true)
     setError(null)
     try {
+      const total = form.lineItems.reduce((sum, l) => sum + l.amount, 0)
       if (modal?.mode === 'create') {
-        const inv = await createInvoice(form)
-        setInvoices(prev => [inv, ...prev])
+        await createInvoice({ ...form, totalAmount: total })
       } else if (modal?.invoice) {
-        const inv = await updateInvoice(modal.invoice.id, form)
-        setInvoices(prev => prev.map(x => x.id === inv.id ? inv : x))
+        await updateInvoice(modal.invoice.id, form)
       }
+      refreshInvoices()
       setModal(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -83,8 +88,8 @@ export function Invoices() {
 
   async function handleVoid(inv: Invoice) {
     try {
-      const updated = await updateInvoice(inv.id, { status: 'void' })
-      setInvoices(prev => prev.map(x => x.id === updated.id ? updated : x))
+      await updateInvoice(inv.id, { status: 'void' })
+      refreshInvoices()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -106,7 +111,9 @@ export function Invoices() {
 
       {error && <ErrorBanner message={error} />}
 
-      {invoices.length === 0 ? (
+      {invoicesLoading ? (
+        <div className="flex justify-center p-8"><Spinner /></div>
+      ) : (invoices ?? []).length === 0 ? (
         <p className="text-sm text-gray-500">No invoices yet. Create one above.</p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-gray-200">
@@ -123,7 +130,7 @@ export function Invoices() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
-              {invoices.map(inv => {
+              {(invoices ?? []).map(inv => {
                 const sl = syncLinkByInternalId.get(inv.id)
                 return (
                   <tr key={inv.id}>
@@ -157,80 +164,144 @@ export function Invoices() {
 
       {/* Create/Edit modal */}
       {modal && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
-            <h3 className="mb-4 text-lg font-semibold">
-              {modal.mode === 'create' ? 'Create Invoice' : 'Edit Invoice'}
-            </h3>
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-2xl rounded-lg bg-white shadow-xl flex flex-col max-h-[90vh]">
+            <div className="px-6 pt-6 pb-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold">
+                {modal.mode === 'create' ? 'Create Invoice' : 'Edit Invoice'}
+              </h3>
+            </div>
 
-            {error && <ErrorBanner message={error} />}
+            <div className="overflow-y-auto px-6 py-4 space-y-4">
+              {error && <ErrorBanner message={error} />}
 
-            <div className="space-y-3">
-              <Field label="Customer ID">
-                <input
-                  className="input"
-                  value={form.customerId}
-                  onChange={e => setForm(f => ({ ...f, customerId: e.target.value }))}
-                />
-              </Field>
-              <Field label="Currency">
-                <input
-                  className="input"
-                  value={form.currency}
-                  onChange={e => setForm(f => ({ ...f, currency: e.target.value }))}
-                />
-              </Field>
-              <Field label="Status">
-                <select
-                  className="input"
-                  value={form.status}
-                  onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-                >
-                  <option value="draft">draft</option>
-                  <option value="sent">sent</option>
-                  <option value="void">void</option>
-                </select>
-              </Field>
-              <Field label="Due Date">
-                <input
-                  type="date"
-                  className="input"
-                  value={form.dueDate}
-                  onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))}
-                />
-              </Field>
-              <Field label="Total Amount">
-                <input
-                  type="number"
-                  className="input"
-                  value={form.totalAmount}
-                  onChange={e => setForm(f => ({ ...f, totalAmount: Number(e.target.value) }))}
-                />
-              </Field>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Customer">
+                  {customers.length > 0 ? (
+                    <select
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={form.customerId}
+                      onChange={e => setForm(f => ({ ...f, customerId: e.target.value }))}
+                    >
+                      <option value="">Select a customer…</option>
+                      {customers.map(c => (
+                        <option key={c.internalCustomerId} value={c.internalCustomerId}>
+                          {c.qboCustomerName} ({c.internalCustomerId})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="No mappings loaded — import first"
+                      value={form.customerId}
+                      onChange={e => setForm(f => ({ ...f, customerId: e.target.value }))}
+                    />
+                  )}
+                </Field>
+                <Field label="Currency">
+                  <input
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={form.currency}
+                    onChange={e => setForm(f => ({ ...f, currency: e.target.value }))}
+                  />
+                </Field>
+                <Field label="Status">
+                  <select
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={form.status}
+                    onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+                  >
+                    <option value="draft">Draft</option>
+                    <option value="sent">Sent</option>
+                    <option value="void">Void</option>
+                  </select>
+                </Field>
+                <Field label="Due Date">
+                  <input
+                    type="date"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={form.dueDate}
+                    onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))}
+                  />
+                </Field>
+              </div>
 
               <div>
-                <div className="mb-1 flex items-center justify-between">
+                <div className="mb-2 flex items-center justify-between">
                   <label className="text-sm font-medium text-gray-700">Line Items</label>
-                  <button onClick={addLine} className="text-xs text-blue-600 hover:underline">+ Add</button>
+                  <button
+                    onClick={addLine}
+                    className="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                  >
+                    + Add Line
+                  </button>
                 </div>
-                {form.lineItems.map((line, i) => (
-                  <div key={i} className="mb-2 grid grid-cols-6 gap-1 text-xs">
-                    <input placeholder="Description" className="input col-span-2" value={line.description}
-                      onChange={e => updateLine(i, 'description', e.target.value)} />
-                    <input type="number" placeholder="Qty" className="input" value={line.quantity}
-                      onChange={e => updateLine(i, 'quantity', Number(e.target.value))} />
-                    <input type="number" placeholder="Unit $" className="input" value={line.unitPrice}
-                      onChange={e => updateLine(i, 'unitPrice', Number(e.target.value))} />
-                    <input type="number" placeholder="Amount" className="input" value={line.amount}
-                      onChange={e => updateLine(i, 'amount', Number(e.target.value))} />
-                    <button onClick={() => removeLine(i)} className="text-red-500 hover:text-red-700">✕</button>
+                <div className="rounded-md border border-gray-200 overflow-hidden">
+                  <div className="grid grid-cols-[1fr_80px_90px_90px_32px] gap-0 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-500 border-b border-gray-200">
+                    <span>Description</span>
+                    <span>Qty</span>
+                    <span>Unit Price</span>
+                    <span>Amount</span>
+                    <span />
                   </div>
-                ))}
+                  {form.lineItems.map((line, i) => (
+                    <div key={i} className="grid grid-cols-[1fr_80px_90px_90px_32px] gap-0 border-b border-gray-100 last:border-0">
+                      <input
+                        placeholder="Description"
+                        className="border-r border-gray-100 px-3 py-2 text-sm focus:outline-none focus:bg-blue-50"
+                        value={line.description}
+                        onChange={e => updateLine(i, 'description', e.target.value)}
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        className="border-r border-gray-100 px-2 py-2 text-sm text-center focus:outline-none focus:bg-blue-50"
+                        value={line.quantity}
+                        onChange={e => updateLine(i, 'quantity', Number(e.target.value))}
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        className="border-r border-gray-100 px-2 py-2 text-sm text-right focus:outline-none focus:bg-blue-50"
+                        value={line.unitPrice}
+                        onChange={e => updateLine(i, 'unitPrice', Number(e.target.value))}
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        className="border-r border-gray-100 px-2 py-2 text-sm text-right focus:outline-none focus:bg-blue-50"
+                        value={line.amount}
+                        onChange={e => updateLine(i, 'amount', Number(e.target.value))}
+                      />
+                      <button
+                        onClick={() => removeLine(i)}
+                        className="flex items-center justify-center text-gray-300 hover:text-red-500"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <div className="rounded-md bg-gray-50 border border-gray-200 px-4 py-2 text-sm">
+                  <span className="text-gray-500 mr-3">Total</span>
+                  <span className="font-semibold text-gray-900">
+                    {form.currency} {form.lineItems.reduce((sum, l) => sum + l.amount, 0).toFixed(2)}
+                  </span>
+                </div>
               </div>
             </div>
 
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setModal(null)} className="rounded px-4 py-2 text-sm text-gray-600 hover:bg-gray-100">
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-2">
+              <button
+                onClick={() => setModal(null)}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+              >
                 Cancel
               </button>
               <button
