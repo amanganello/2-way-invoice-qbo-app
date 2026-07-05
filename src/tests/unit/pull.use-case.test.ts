@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import { pullInvoice } from "@/application/sync/pull.use-case";
+import { pullInvoice, type PullDeps } from "@/application/sync/pull.use-case";
 import type { Invoice, QBOInvoiceResult } from "@/domain/invoices/invoice.types";
-import type { SyncLinkRecord } from "@/infrastructure/database/sync-link.repository";
+import type { SyncLinkRecord } from "@/application/ports/sync.ports";
 
 function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {
   return {
@@ -34,13 +34,29 @@ function makeDeps() {
   return {
     invoiceRepo: { findById: vi.fn(async () => makeInvoice()), save: vi.fn(async (i: Invoice) => i) },
     syncLinkRepo: {
+      findByInternalId: vi.fn(async () => makeSyncLink()),
       findByQboId: vi.fn(async () => makeSyncLink()),
+      findById: vi.fn(async () => makeSyncLink()),
+      list: vi.fn(async () => []),
+      listConflicts: vi.fn(async () => []),
+      create: vi.fn(async () => makeSyncLink()),
       setProcessing: vi.fn(async () => true),
       setStatus: vi.fn(async () => makeSyncLink()),
+      upsertLinked: vi.fn(async () => makeSyncLink()),
+      findByStatuses: vi.fn(async () => []),
+      findStuckProcessing: vi.fn(async () => []),
+      findUnsynced: vi.fn(async () => []),
+      findInvoicesWithoutSyncLink: vi.fn(async () => []),
     },
-    qboInvoicePort: { getInvoice: vi.fn(async () => makeQBOResult()) },
-    auditLogRepo: { create: vi.fn(async () => {}) },
-  };
+    qboInvoicePort: {
+      getInvoice: vi.fn(async () => makeQBOResult()),
+      createInvoice: vi.fn(async () => makeQBOResult()),
+      updateInvoice: vi.fn(async () => makeQBOResult()),
+      voidInvoice: vi.fn(async () => makeQBOResult()),
+      findByDocNumber: vi.fn(async () => null),
+    },
+    auditLogRepo: { create: vi.fn(async () => {}), findBySyncLinkId: vi.fn(async () => []) },
+  } satisfies PullDeps;
 }
 
 // version in makeSyncLink is 0; after setProcessing increments it, currentVersion = 1
@@ -49,7 +65,7 @@ const PROCESSING_VERSION = 1;
 describe("pullInvoice", () => {
   it("applies QBO invoice update when not stale", async () => {
     const deps = makeDeps();
-    await pullInvoice("qbo-1", "Update", "evt-1", deps as never);
+    await pullInvoice("qbo-1", "Update", "evt-1", deps);
     expect(deps.invoiceRepo.save).toHaveBeenCalledOnce();
     expect(deps.syncLinkRepo.setStatus).toHaveBeenCalledWith(
       "sl-1", PROCESSING_VERSION, "SYNCED", expect.objectContaining({ qboSyncToken: "2" })
@@ -62,7 +78,7 @@ describe("pullInvoice", () => {
     (deps.syncLinkRepo.findByQboId as ReturnType<typeof vi.fn>).mockResolvedValue(
       makeSyncLink({ qboUpdatedAt: new Date("2026-12-01") }) // newer than QBO result
     );
-    await pullInvoice("qbo-1", "Update", "evt-1", deps as never);
+    await pullInvoice("qbo-1", "Update", "evt-1", deps);
     expect(deps.invoiceRepo.save).not.toHaveBeenCalled();
     expect(deps.auditLogRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({ action: "skipped_stale" })
@@ -88,14 +104,14 @@ describe("pullInvoice", () => {
     (deps.qboInvoicePort.getInvoice as ReturnType<typeof vi.fn>).mockResolvedValue(
       makeQBOResult({ invoice: makeInvoice({ dueDate: new Date("2030-03-01") }) }) // QBO also changed
     );
-    await pullInvoice("qbo-1", "Update", "evt-1", deps as never);
+    await pullInvoice("qbo-1", "Update", "evt-1", deps);
     expect(deps.syncLinkRepo.setStatus).toHaveBeenCalledWith("sl-1", PROCESSING_VERSION, "CONFLICT", expect.anything());
     expect(deps.invoiceRepo.save).not.toHaveBeenCalled();
   });
 
   it("sets internal invoice status to void on Void event", async () => {
     const deps = makeDeps();
-    await pullInvoice("qbo-1", "Void", "evt-1", deps as never);
+    await pullInvoice("qbo-1", "Void", "evt-1", deps);
     const savedInvoice = (deps.invoiceRepo.save as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(savedInvoice.status).toBe("void");
     expect(deps.qboInvoicePort.getInvoice).not.toHaveBeenCalled();
@@ -104,7 +120,7 @@ describe("pullInvoice", () => {
   it("sets ERROR status when void event arrives and internal invoice is missing", async () => {
     const deps = makeDeps();
     (deps.invoiceRepo.findById as ReturnType<typeof vi.fn>).mockResolvedValue(null);
-    await pullInvoice("qbo-1", "Void", "evt-1", deps as never);
+    await pullInvoice("qbo-1", "Void", "evt-1", deps);
     expect(deps.syncLinkRepo.setStatus).toHaveBeenCalledWith(
       "sl-1", PROCESSING_VERSION, "ERROR", expect.anything()
     );
@@ -119,7 +135,7 @@ describe("pullInvoice", () => {
     (deps.invoiceRepo.findById as ReturnType<typeof vi.fn>).mockResolvedValue(
       makeInvoice({ status: "void" })
     );
-    await pullInvoice("qbo-1", "Void", "evt-1", deps as never);
+    await pullInvoice("qbo-1", "Void", "evt-1", deps);
     expect(deps.syncLinkRepo.setStatus).toHaveBeenCalledWith(
       "sl-1", PROCESSING_VERSION, "SYNCED", expect.anything()
     );
@@ -132,14 +148,14 @@ describe("pullInvoice", () => {
   it("exits silently when optimistic lock fails", async () => {
     const deps = makeDeps();
     (deps.syncLinkRepo.setProcessing as ReturnType<typeof vi.fn>).mockResolvedValue(false);
-    await pullInvoice("qbo-1", "Update", "evt-1", deps as never);
+    await pullInvoice("qbo-1", "Update", "evt-1", deps);
     expect(deps.invoiceRepo.save).not.toHaveBeenCalled();
   });
 
   it("exits silently when no SyncLink found for qboId", async () => {
     const deps = makeDeps();
     (deps.syncLinkRepo.findByQboId as ReturnType<typeof vi.fn>).mockResolvedValue(null);
-    await pullInvoice("qbo-1", "Update", "evt-1", deps as never);
+    await pullInvoice("qbo-1", "Update", "evt-1", deps);
     expect(deps.invoiceRepo.save).not.toHaveBeenCalled();
   });
 
@@ -163,7 +179,7 @@ describe("pullInvoice", () => {
     (deps.qboInvoicePort.getInvoice as ReturnType<typeof vi.fn>).mockResolvedValue(
       makeQBOResult({ invoice: makeInvoice({ totalAmount: "100.00", status: "paid" }) })
     );
-    await pullInvoice("qbo-1", "Update", "evt-1", deps as never);
+    await pullInvoice("qbo-1", "Update", "evt-1", deps);
     // Should not call setStatus with CONFLICT
     expect(deps.syncLinkRepo.setStatus).not.toHaveBeenCalledWith(
       expect.anything(), expect.anything(), "CONFLICT", expect.anything()

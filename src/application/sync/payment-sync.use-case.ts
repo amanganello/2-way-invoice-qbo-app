@@ -7,6 +7,7 @@ import type {
 } from "@/application/ports/sync.ports.js";
 import logger from "@/infrastructure/logger/index.js";
 import { ExternalServiceError } from "@/shared/errors/app-error.js";
+import { QboDuplicateDocumentError } from "./qbo-sync-errors.js";
 
 export type PaymentSyncDeps = {
   paymentRepo: PaymentRepository;
@@ -78,8 +79,7 @@ export async function syncPayment(internalPaymentId: string, deps: PaymentSyncDe
       const result = await qboPaymentPort.createPayment(payment, customerRef, syncLink.qboId);
       qboId = result.qboId;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.toLowerCase().includes("duplicate")) {
+      if (err instanceof QboDuplicateDocumentError) {
         const matches = await qboPaymentPort.findByPaymentRefNum(payment.id);
         if (matches.length === 1) {
           qboId = matches[0].qboId;

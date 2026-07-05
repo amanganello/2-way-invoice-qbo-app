@@ -16,6 +16,8 @@ type InvoiceBody = {
   dueDate: Date;
 };
 
+export type UpdateInvoiceBody = Partial<InvoiceBody>;
+
 const LineItemSchema: z.ZodType<InvoiceLineItem, z.ZodTypeDef, unknown> = z.object({
   description: z.string().min(1),
   quantity: z.number().positive(),
@@ -82,7 +84,7 @@ export const UpdateInvoiceSchema = BaseInvoiceSchema.partial()
   .transform(invoice => ({
     ...invoice,
     ...(invoice.totalAmount !== undefined ? { totalAmount: MoneySchema.parse(invoice.totalAmount) } : {}),
-  }));
+  })) as z.ZodType<UpdateInvoiceBody, z.ZodTypeDef, unknown>;
 
 export const InvoiceListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),

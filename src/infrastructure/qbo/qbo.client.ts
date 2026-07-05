@@ -2,6 +2,12 @@ import { env } from "@/config/env.js";
 import { qboCredentialsRepository } from "@/infrastructure/database/qbo-credentials.repository.js";
 import logger from "@/infrastructure/logger/index.js";
 import { ExternalServiceError, NotFoundError } from "@/shared/errors/app-error.js";
+import {
+  QboAlreadyVoidedError,
+  QboDuplicateDocumentError,
+  QboRateLimitedError,
+  QboStaleObjectError,
+} from "@/application/sync/qbo-sync-errors.js";
 import type { QBOFault } from "./qbo.types.js";
 
 const BASE_URLS = {
@@ -70,12 +76,12 @@ export class QBOClient {
           await this.delay(Math.min(Number(retryAfter) * 1000 || 1000, 5000));
           return this.requestWithRetry(method, path, body, parse, attempt + 1);
         }
-        throw new ExternalServiceError(`QBO rate limited; retry after ${retryAfter}s`);
+        throw new QboRateLimitedError(retryAfter);
       }
 
       if (this.isQboFault(json)) {
         const err = json.Fault.Error[0];
-        throw new ExternalServiceError(`QBO API fault: ${err.Message}`);
+        throw this.toQboError(err);
       }
 
       if (!response.ok) {
@@ -203,6 +209,24 @@ export class QBOClient {
 
   private isTransientStatus(status: number): boolean {
     return status === 408 || status === 425 || status === 500 || status === 502 || status === 503 || status === 504;
+  }
+
+  private toQboError(error: QBOFault["Fault"]["Error"][number]): ExternalServiceError {
+    const message = error.Message;
+    const detail = error.Detail ?? "";
+    const code = error.code ?? "";
+    const combined = `${message} ${detail} ${code}`.toLowerCase();
+
+    if (code === "6240" || combined.includes("duplicate")) {
+      return new QboDuplicateDocumentError(`QBO API fault: ${message}`);
+    }
+    if (combined.includes("stale object") || combined.includes("stale")) {
+      return new QboStaleObjectError(`QBO API fault: ${message}`);
+    }
+    if (combined.includes("already voided") || combined.includes("voided")) {
+      return new QboAlreadyVoidedError(`QBO API fault: ${message}`);
+    }
+    return new ExternalServiceError(`QBO API fault: ${message}`);
   }
 
   private async delay(ms: number): Promise<void> {

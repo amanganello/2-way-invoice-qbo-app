@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { reconcileInvoice } from "@/application/sync/reconcile.use-case";
+import { reconcileInvoice, type ReconcileDeps } from "@/application/sync/reconcile.use-case";
+import { QboDuplicateDocumentError } from "@/application/sync/qbo-sync-errors";
 import type { Invoice, QBOInvoicePort, QBOInvoiceResult, QBOSyncContext } from "@/domain/invoices/invoice.types";
-import type { SyncLinkRecord } from "@/infrastructure/database/sync-link.repository";
+import type { SyncLinkRecord } from "@/application/ports/sync.ports";
 
 function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {
   return {
@@ -29,11 +30,14 @@ function makeSyncLink(overrides: Partial<SyncLinkRecord> = {}): SyncLinkRecord {
 }
 
 function makeDeps(overrides: Partial<Parameters<typeof reconcileInvoice>[1]> = {}) {
-  return {
+  const deps = {
     invoiceRepo: { findById: vi.fn(async () => makeInvoice()), save: vi.fn(async (i: Invoice) => i) },
     syncLinkRepo: {
       findByInternalId: vi.fn(async () => makeSyncLink()),
       findByQboId: vi.fn(async () => null),
+      findById: vi.fn(async () => makeSyncLink()),
+      list: vi.fn(async () => [makeSyncLink()]),
+      listConflicts: vi.fn(async () => []),
       create: vi.fn(async () => makeSyncLink()),
       setProcessing: vi.fn(async () => true),
       setStatus: vi.fn(async () => makeSyncLink()),
@@ -41,11 +45,20 @@ function makeDeps(overrides: Partial<Parameters<typeof reconcileInvoice>[1]> = {
       findByStatuses: vi.fn(async () => []),
       findStuckProcessing: vi.fn(async () => []),
       findUnsynced: vi.fn(async () => []),
+      findInvoicesWithoutSyncLink: vi.fn(async () => []),
     },
-    paymentSyncLinkRepo: { findByInvoiceInternalId: vi.fn(async () => []) },
-    accountMapRepo: { findByInternalCode: vi.fn(async () => null) },
-    itemMapRepo: { findByInternalCode: vi.fn(async () => null) },
-    customerMapRepo: { findByInternalId: vi.fn(async () => ({ internalCustomerId: "cust-1", qboCustomerId: "QBO-CUST-1", qboCustomerName: "Test" })) },
+    paymentSyncLinkRepo: {
+      findByInternalId: vi.fn(async () => null),
+      findByInvoiceInternalId: vi.fn(async () => []),
+      create: vi.fn(async () => ({ id: "psl-1", internalId: "pay-1", qboId: "qbo-pay-1", invoiceInternalId: "inv-1", syncStatus: "SYNCED", lastSyncedAt: null, createdAt: new Date(), updatedAt: new Date() })),
+    },
+    accountMapRepo: { findByInternalCode: vi.fn(async () => null), upsertMany: vi.fn(async () => 0), findAll: vi.fn(async () => []) },
+    itemMapRepo: { findByInternalCode: vi.fn(async () => null), upsertMany: vi.fn(async () => 0), findAll: vi.fn(async () => []) },
+    customerMapRepo: {
+      findByInternalId: vi.fn(async () => ({ qboCustomerId: "QBO-CUST-1" })),
+      upsertMany: vi.fn(async () => 0),
+      findAll: vi.fn(async () => []),
+    },
     qboInvoicePort: {
       createInvoice: vi.fn(async () => makeQBOResult()),
       updateInvoice: vi.fn(async () => makeQBOResult()),
@@ -57,7 +70,8 @@ function makeDeps(overrides: Partial<Parameters<typeof reconcileInvoice>[1]> = {
     qbDefaultCustomerId: undefined,
     qbEnvironment: "sandbox",
     ...overrides,
-  };
+  } satisfies ReconcileDeps;
+  return deps;
 }
 
 describe("reconcileInvoice", () => {
@@ -65,14 +79,14 @@ describe("reconcileInvoice", () => {
     const deps = makeDeps({
       syncLinkRepo: { ...makeDeps().syncLinkRepo, findByInternalId: vi.fn(async () => null) },
     });
-    await reconcileInvoice("inv-1", deps as never);
+    await reconcileInvoice("inv-1", deps);
     expect(deps.qboInvoicePort.createInvoice).toHaveBeenCalledOnce();
     expect(deps.syncLinkRepo.upsertLinked).toHaveBeenCalledOnce();
   });
 
   it("calls updateInvoice when SyncLink with qboId exists", async () => {
     const deps = makeDeps();
-    await reconcileInvoice("inv-1", deps as never);
+    await reconcileInvoice("inv-1", deps);
     expect(deps.qboInvoicePort.updateInvoice).toHaveBeenCalledOnce();
   });
 
@@ -80,7 +94,7 @@ describe("reconcileInvoice", () => {
     const deps = makeDeps({
       invoiceRepo: { ...makeDeps().invoiceRepo, findById: vi.fn(async () => makeInvoice({ status: "void" })) },
     });
-    await reconcileInvoice("inv-1", deps as never);
+    await reconcileInvoice("inv-1", deps);
     expect(deps.qboInvoicePort.voidInvoice).toHaveBeenCalledOnce();
   });
 
@@ -89,7 +103,7 @@ describe("reconcileInvoice", () => {
       invoiceRepo: { ...makeDeps().invoiceRepo, findById: vi.fn(async () => makeInvoice({ status: "void" })) },
       syncLinkRepo: { ...makeDeps().syncLinkRepo, findByInternalId: vi.fn(async () => null) },
     });
-    await reconcileInvoice("inv-1", deps as never);
+    await reconcileInvoice("inv-1", deps);
     expect(deps.qboInvoicePort.voidInvoice).not.toHaveBeenCalled();
     expect(deps.qboInvoicePort.createInvoice).not.toHaveBeenCalled();
     expect(deps.auditLogRepo.create).toHaveBeenCalledWith(
@@ -101,7 +115,7 @@ describe("reconcileInvoice", () => {
     const deps = makeDeps({
       syncLinkRepo: { ...makeDeps().syncLinkRepo, setProcessing: vi.fn(async () => false) },
     });
-    await reconcileInvoice("inv-1", deps as never);
+    await reconcileInvoice("inv-1", deps);
     expect(deps.qboInvoicePort.updateInvoice).not.toHaveBeenCalled();
   });
 
@@ -112,7 +126,7 @@ describe("reconcileInvoice", () => {
       qbDefaultCustomerId: undefined,
       qbEnvironment: "production",
     });
-    await expect(reconcileInvoice("inv-1", deps as never)).rejects.toThrow("No CustomerMap entry");
+    await expect(reconcileInvoice("inv-1", deps)).rejects.toThrow("No CustomerMap entry");
   });
 
   it("uses QB_DEFAULT_CUSTOMER_ID fallback in sandbox when no CustomerMap entry", async () => {
@@ -122,7 +136,7 @@ describe("reconcileInvoice", () => {
       qbDefaultCustomerId: "DEFAULT-CUST",
       qbEnvironment: "sandbox",
     });
-    await reconcileInvoice("inv-1", deps as never);
+    await reconcileInvoice("inv-1", deps);
     const callArg = (deps.qboInvoicePort.createInvoice as ReturnType<typeof vi.fn>).mock.calls[0][1] as QBOSyncContext;
     expect(callArg.customerRef).toBe("DEFAULT-CUST");
   });
@@ -155,7 +169,7 @@ describe("reconcileInvoice", () => {
         findByInvoiceInternalId: vi.fn(async () => [{ id: "psl-1" }]),
       },
     });
-    await expect(reconcileInvoice("inv-1", deps as never)).rejects.toThrow(
+    await expect(reconcileInvoice("inv-1", deps)).rejects.toThrow(
       /lineItems and totalAmount cannot be modified/
     );
   });
@@ -167,7 +181,7 @@ describe("reconcileInvoice", () => {
         updateInvoice: vi.fn(async () => { throw new Error("QBO timeout"); }),
       } as QBOInvoicePort,
     });
-    await expect(reconcileInvoice("inv-1", deps as never)).rejects.toThrow("QBO timeout");
+    await expect(reconcileInvoice("inv-1", deps)).rejects.toThrow("QBO timeout");
     expect(deps.syncLinkRepo.setStatus).toHaveBeenCalledWith("sl-1", 0, "ERROR", {});
     expect(deps.auditLogRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({ action: "reconcile_failed", result: "FAILURE" })
@@ -180,11 +194,11 @@ describe("reconcileInvoice", () => {
       syncLinkRepo: { ...makeDeps().syncLinkRepo, findByInternalId: vi.fn(async () => null) },
       qboInvoicePort: {
         ...makeDeps().qboInvoicePort,
-        createInvoice: vi.fn(async () => { throw new Error("Duplicate Document Number Error, 6240"); }),
+        createInvoice: vi.fn(async () => { throw new QboDuplicateDocumentError("Duplicate Document Number Error, 6240"); }),
         findByDocNumber: vi.fn(async () => existingResult),
       } as QBOInvoicePort,
     });
-    await reconcileInvoice("inv-1", deps as never);
+    await reconcileInvoice("inv-1", deps);
     // docNumber = internalId stripped of dashes, truncated to 20 chars → "inv1"
     expect(deps.qboInvoicePort.findByDocNumber).toHaveBeenCalledWith("inv1");
     expect(deps.syncLinkRepo.upsertLinked).toHaveBeenCalledWith(
@@ -224,7 +238,7 @@ describe("reconcileInvoice", () => {
       },
     });
     // Should NOT throw — amounts are equal, just different formats
-    await expect(reconcileInvoice("inv-1", deps as never)).resolves.not.toThrow();
+    await expect(reconcileInvoice("inv-1", deps)).resolves.not.toThrow();
   });
 
   it("allows update when only dueDate changed on a partially-paid invoice", async () => {
@@ -254,7 +268,7 @@ describe("reconcileInvoice", () => {
       },
     });
     // dueDate change is allowed on partially-paid invoices
-    await expect(reconcileInvoice("inv-1", deps as never)).resolves.not.toThrow();
+    await expect(reconcileInvoice("inv-1", deps)).resolves.not.toThrow();
     expect(deps.qboInvoicePort.updateInvoice).toHaveBeenCalledOnce();
   });
 });

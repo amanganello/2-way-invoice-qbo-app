@@ -12,8 +12,8 @@ export function startWorkers(): { workers: Worker[]; stop: () => Promise<void> }
   // Retry config (attempts + backoff) belongs on the Queue, not the Worker.
   // See src/infrastructure/queue/queues.ts for defaultJobOptions.
   const invoiceSyncWorker = new Worker("invoice-sync", async (job) => {
-    if (job.name === "reconcile") return reconcileProcessor(job as never);
-    if (job.name === "pull") return pullProcessor(job as never);
+    if (job.name === "reconcile") return reconcileProcessor(job as Parameters<typeof reconcileProcessor>[0]);
+    if (job.name === "pull") return pullProcessor(job as Parameters<typeof pullProcessor>[0]);
   }, {
     connection: redisConnection,
     concurrency: 5,
@@ -21,7 +21,7 @@ export function startWorkers(): { workers: Worker[]; stop: () => Promise<void> }
   });
 
   const paymentSyncWorker = new Worker("payment-sync", async (job) => {
-    return paymentProcessor(job as never);
+    return paymentProcessor(job as Parameters<typeof paymentProcessor>[0]);
   }, {
     connection: redisConnection,
     concurrency: 2,

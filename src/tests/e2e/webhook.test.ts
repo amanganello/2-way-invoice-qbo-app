@@ -66,7 +66,7 @@ describe("POST /webhooks/qbo", () => {
     expect(mockQueue.add).toHaveBeenCalledWith(
       "pull",
       expect.objectContaining({ qboId: "qbo-123", entityType: "Invoice" }),
-      expect.objectContaining({ jobId: "pull-Invoice-qbo-123" })
+      expect.objectContaining({ jobId: "pull-Invoice-qbo-123-2026-01-01" })
     );
   });
 
@@ -83,7 +83,7 @@ describe("POST /webhooks/qbo", () => {
     expect(mockQueue.add).toHaveBeenCalledWith(
       "pull",
       expect.objectContaining({ qboId: "qbo-123", entityType: "Invoice" }),
-      expect.objectContaining({ jobId: "pull-Invoice-qbo-123" })
+      expect.objectContaining({ jobId: "pull-Invoice-qbo-123-2026-01-01" })
     );
   });
 

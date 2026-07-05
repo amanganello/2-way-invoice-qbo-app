@@ -32,7 +32,16 @@ async function req<T>(method: string, path: string, body?: unknown, apiKey?: str
     headers: getHeaders(apiKey),
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
-  if (!res.ok) throw new Error(`${method} ${path} → ${res.status}`)
+  if (!res.ok) {
+    let message = `${method} ${path} → ${res.status}`
+    try {
+      const errorBody = await res.json() as { message?: string; error?: string }
+      message = errorBody.message ?? errorBody.error ?? message
+    } catch {
+      // Keep the status-based fallback for non-JSON error responses.
+    }
+    throw new Error(message)
+  }
   return res.json() as Promise<T>
 }
 

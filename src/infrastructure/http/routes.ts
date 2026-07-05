@@ -6,9 +6,11 @@ import { registerAuthRoutes } from "@/infrastructure/http/auth/auth.routes.js";
 import { registerSyncRoutes } from "@/infrastructure/http/sync/sync.routes.js";
 import { apiKeyMiddleware } from "@/infrastructure/http/middleware/api-key.js";
 import type { AuthRouteDeps } from "./auth/auth.routes.js";
+import type { InvoiceRouteDeps } from "./invoices/invoice.routes.js";
 
 export type RouteDeps = {
   auth?: AuthRouteDeps;
+  invoices?: InvoiceRouteDeps;
 };
 
 export async function registerRoutes(app: FastifyInstance, deps: RouteDeps = {}): Promise<void> {
@@ -19,6 +21,6 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps = {})
 
   // All routes registered after this hook require a valid API key.
   app.addHook("onRequest", apiKeyMiddleware);
-  await registerInvoiceRoutes(app);
+  await registerInvoiceRoutes(app, deps.invoices);
   await registerSyncRoutes(app);
 }
