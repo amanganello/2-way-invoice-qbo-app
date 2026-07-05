@@ -107,7 +107,7 @@ incoming events.
 
 ### 7. Start the service
 
-The service runs as two separate processes. Open two terminals:
+The service runs as three separate processes. Open three terminals:
 
 **Terminal 1 — HTTP server:**
 ```bash
@@ -124,6 +124,18 @@ Should log: `Workers started`
 The worker handles all BullMQ jobs (reconcile push, pull from QBO,
 payment sync, polling reconciliation). Without it, invoices will be
 created in the DB but never synced to QBO.
+
+**Terminal 3 — Frontend dev server:**
+```bash
+cd client && pnpm dev
+```
+Should log: `➜  Local:   http://localhost:5173/`
+
+Open <http://localhost:5173> in your browser. On first load you will be
+prompted for the API key — paste the value of `API_KEY` from your `.env`.
+The frontend proxies all API calls to the Fastify server on port 3000, so
+both must be running at the same time. See `docs/running-frontend-locally.md`
+for a full walkthrough of each tab and what you can test there.
 
 ### 8. Import QBO mappings
 
