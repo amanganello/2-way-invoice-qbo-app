@@ -6,3 +6,7 @@ export const redisConnection = new Redis(env.REDIS_URL, {
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
 });
+
+// Shared across 3 Queues, 3 Workers, and direct app usage (auth state, health check).
+// BullMQ adds ~2 "end" listeners per Queue/Worker — 30 is a safe ceiling for this topology.
+redisConnection.setMaxListeners(30);
