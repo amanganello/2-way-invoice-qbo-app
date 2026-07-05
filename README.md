@@ -289,7 +289,7 @@ tradeoff reasoning.
 5. Set env vars (QB_CLIENT_ID, QB_CLIENT_SECRET, QB_REALM_ID, QB_WEBHOOK_VERIFIER_TOKEN, QB_REDIRECT_URI, TOKEN_ENCRYPTION_KEY, API_KEY, QB_ENVIRONMENT=sandbox)
 6. Set deploy command: `pnpm migrate`
 7. Add second Railway service (`worker`) from same repo, override start command to `node dist/worker.js`
-8. Run `pnpm qbo-auth` locally pointing QB_REDIRECT_URI at Railway domain to get initial tokens
+8. Set `QB_REDIRECT_URI=https://<web>.railway.app/auth/qbo/callback` and `FRONTEND_URL=https://<web>.railway.app` in Railway env vars, then open the app's Auth tab and click **Reconnect QBO** to complete the OAuth flow in the browser — no terminal access required.
 9. Set QBO webhook endpoint to `https://<web-service>.railway.app/webhooks/qbo`
 
 ---

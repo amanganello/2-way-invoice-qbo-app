@@ -77,10 +77,15 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
     const { frontendUrl } = entry;
 
+    if (!code || !realmId) {
+      return reply.redirect(`${frontendUrl}?auth=error&message=${encodeURIComponent('Authorization denied or missing parameters')}`);
+    }
+
     try {
       const client = makeOAuthClient();
       // Reconstruct full callback URL (intuit-oauth requires it for token exchange)
       const callbackUrl = `${env.QB_REDIRECT_URI}?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}&realmId=${encodeURIComponent(realmId)}`;
+      const now = Date.now();
       const authResponse = await client.createToken(callbackUrl);
       const tokens = authResponse.getJson() as {
         access_token: string;
@@ -88,8 +93,6 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         expires_in: number;
         x_refresh_token_expires_in: number;
       };
-
-      const now = Date.now();
       await qboCredentialsRepository.save({
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token,

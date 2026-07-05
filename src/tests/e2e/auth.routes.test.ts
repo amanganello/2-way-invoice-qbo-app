@@ -112,4 +112,20 @@ describe("Auth routes", () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it("GET /auth/qbo/callback with valid state saves tokens and redirects to ?auth=success", async () => {
+    // Initiate flow to plant a valid state in pendingStates
+    await app.inject({ method: "GET", url: "/auth/qbo/start?apiKey=test-api-key" });
+    // The start handler calls client.authorizeUri({ scope, state }) — capture state from mock args
+    const startCallArgs = mockAuthorizeUri.mock.calls.at(-1)?.[0] as { state: string };
+    const state = startCallArgs.state;
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/auth/qbo/callback?code=valid-code&state=${state}&realmId=123`,
+    });
+    expect(res.statusCode).toBe(302);
+    expect(res.headers["location"]).toContain("auth=success");
+    expect(mockSave).toHaveBeenCalledOnce();
+  });
 });
