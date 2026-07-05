@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { createHmac } from "node:crypto";
-import { buildApp } from "@/app.js";
+import { buildApp } from "@/app";
 
 const VERIFIER_TOKEN = "test-webhook-token"; // matches vitest.config.ts QB_WEBHOOK_VERIFIER_TOKEN
 
@@ -20,13 +20,13 @@ describe("POST /webhooks/qbo", () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
-    vi.doMock("@/infrastructure/queue/queues.js", () => ({ invoiceSyncQueue: mockQueue }));
-    vi.doMock("@/infrastructure/database/prisma.js", () => ({ prisma: mockPrisma }));
-    vi.doMock("@/infrastructure/queue/redis.js", () => ({
+    vi.doMock("@/infrastructure/queue/queues", () => ({ invoiceSyncQueue: mockQueue }));
+    vi.doMock("@/infrastructure/database/prisma", () => ({ prisma: mockPrisma }));
+    vi.doMock("@/infrastructure/queue/redis", () => ({
       redisConnection: { ping: vi.fn(async () => "PONG") },
     }));
 
-    const { registerRoutes } = await import("@/infrastructure/http/routes.js");
+    const { registerRoutes } = await import("@/infrastructure/http/routes");
     app = buildApp();
     await registerRoutes(app);
     await app.ready();

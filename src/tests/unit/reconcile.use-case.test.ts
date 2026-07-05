@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import { reconcileInvoice } from "@/application/sync/reconcile.use-case.js";
-import type { Invoice, QBOInvoicePort, QBOInvoiceResult, QBOSyncContext } from "@/domain/invoices/invoice.types.js";
-import type { SyncLinkRecord } from "@/infrastructure/database/sync-link.repository.js";
+import { reconcileInvoice } from "@/application/sync/reconcile.use-case";
+import type { Invoice, QBOInvoicePort, QBOInvoiceResult, QBOSyncContext } from "@/domain/invoices/invoice.types";
+import type { SyncLinkRecord } from "@/infrastructure/database/sync-link.repository";
 
 function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {
   return {

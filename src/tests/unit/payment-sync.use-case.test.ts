@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { syncPayment } from "@/application/sync/payment-sync.use-case.js";
-import type { Payment } from "@/domain/invoices/invoice.types.js";
+import { syncPayment } from "@/application/sync/payment-sync.use-case";
+import type { Payment } from "@/domain/invoices/invoice.types";
 
 function makePayment(overrides: Partial<Payment> = {}): Payment {
   return { id: "pay-1", invoiceId: "inv-1", amount: "100.00", currency: "USD", paidAt: new Date(), ...overrides };

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
-import { buildApp } from "@/app.js";
+import { buildApp } from "@/app";
 
 // Mock intuit-oauth before any imports that use it
 const mockAuthorizeUri = vi.fn(() => "https://appcenter.intuit.com/connect/oauth2?mock=1");
@@ -36,10 +36,10 @@ describe("Auth routes", () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
-    vi.doMock("@/infrastructure/database/qbo-credentials.repository.js", () => ({
+    vi.doMock("@/infrastructure/database/qbo-credentials.repository", () => ({
       qboCredentialsRepository: { get: mockCreds, save: mockSave },
     }));
-    const { registerRoutes } = await import("@/infrastructure/http/routes.js");
+    const { registerRoutes } = await import("@/infrastructure/http/routes");
     app = buildApp();
     await registerRoutes(app);
     await app.ready();

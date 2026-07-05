@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { detectConflicts } from "@/application/sync/conflict-detection.js";
-import type { Invoice } from "@/domain/invoices/invoice.types.js";
+import { detectConflicts } from "@/application/sync/conflict-detection";
+import type { Invoice } from "@/domain/invoices/invoice.types";
 
 function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {
   return {

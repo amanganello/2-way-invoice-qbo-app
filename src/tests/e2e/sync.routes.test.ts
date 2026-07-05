@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
-import { buildApp } from "@/app.js";
+import { buildApp } from "@/app";
 
 const AUTH = { authorization: "Bearer test-api-key" };
 
@@ -31,13 +31,13 @@ describe("Sync routes", () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
-    vi.doMock("@/infrastructure/database/prisma.js", () => ({ prisma: mockPrisma }));
-    vi.doMock("@/infrastructure/database/sync-link.repository.js", () => ({ syncLinkRepository: mockSyncLinkRepo }));
-    vi.doMock("@/infrastructure/database/audit-log.repository.js", () => ({ auditLogRepository: mockAuditLogRepo }));
-    vi.doMock("@/infrastructure/queue/queues.js", () => ({ invoiceSyncQueue: mockInvoiceSyncQueue }));
-    vi.doMock("@/infrastructure/queue/redis.js", () => ({ redisConnection: { ping: vi.fn(async () => "PONG") } }));
+    vi.doMock("@/infrastructure/database/prisma", () => ({ prisma: mockPrisma }));
+    vi.doMock("@/infrastructure/database/sync-link.repository", () => ({ syncLinkRepository: mockSyncLinkRepo }));
+    vi.doMock("@/infrastructure/database/audit-log.repository", () => ({ auditLogRepository: mockAuditLogRepo }));
+    vi.doMock("@/infrastructure/queue/queues", () => ({ invoiceSyncQueue: mockInvoiceSyncQueue }));
+    vi.doMock("@/infrastructure/queue/redis", () => ({ redisConnection: { ping: vi.fn(async () => "PONG") } }));
 
-    const { registerRoutes } = await import("@/infrastructure/http/routes.js");
+    const { registerRoutes } = await import("@/infrastructure/http/routes");
     app = buildApp();
     await registerRoutes(app);
     await app.ready();

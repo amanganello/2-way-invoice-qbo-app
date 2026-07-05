@@ -1,21 +1,21 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { setupServer } from "msw/node";
 import { http, HttpResponse } from "msw";
-import { prisma } from "@/infrastructure/database/prisma.js";
-import { syncLinkRepository } from "@/infrastructure/database/sync-link.repository.js";
-import { paymentSyncLinkRepository } from "@/infrastructure/database/payment-sync-link.repository.js";
-import { reconcileInvoice } from "@/application/sync/reconcile.use-case.js";
-import { pullInvoice } from "@/application/sync/pull.use-case.js";
-import { syncPayment } from "@/application/sync/payment-sync.use-case.js";
-import { auditLogRepository } from "@/infrastructure/database/audit-log.repository.js";
-import { encrypt } from "@/shared/crypto/encryption.js";
-import { accountMapRepository } from "@/infrastructure/database/account-map.repository.js";
-import { itemMapRepository } from "@/infrastructure/database/item-map.repository.js";
-import { customerMapRepository } from "@/infrastructure/database/customer-map.repository.js";
-import { PrismaInvoiceRepository } from "@/infrastructure/database/invoice.repository.js";
-import { PrismaPaymentRepository } from "@/infrastructure/database/payment.repository.js";
-import { QBOInvoiceAdapter } from "@/infrastructure/qbo/qbo-invoice.adapter.js";
-import { QBOPaymentAdapter } from "@/infrastructure/qbo/qbo-payment.adapter.js";
+import { prisma } from "@/infrastructure/database/prisma";
+import { syncLinkRepository } from "@/infrastructure/database/sync-link.repository";
+import { paymentSyncLinkRepository } from "@/infrastructure/database/payment-sync-link.repository";
+import { reconcileInvoice } from "@/application/sync/reconcile.use-case";
+import { pullInvoice } from "@/application/sync/pull.use-case";
+import { syncPayment } from "@/application/sync/payment-sync.use-case";
+import { auditLogRepository } from "@/infrastructure/database/audit-log.repository";
+import { encrypt } from "@/shared/crypto/encryption";
+import { accountMapRepository } from "@/infrastructure/database/account-map.repository";
+import { itemMapRepository } from "@/infrastructure/database/item-map.repository";
+import { customerMapRepository } from "@/infrastructure/database/customer-map.repository";
+import { PrismaInvoiceRepository } from "@/infrastructure/database/invoice.repository";
+import { PrismaPaymentRepository } from "@/infrastructure/database/payment.repository";
+import { QBOInvoiceAdapter } from "@/infrastructure/qbo/qbo-invoice.adapter";
+import { QBOPaymentAdapter } from "@/infrastructure/qbo/qbo-payment.adapter";
 
 const QBO_BASE = "https://sandbox-quickbooks.api.intuit.com/v3/company/test-realm";
 

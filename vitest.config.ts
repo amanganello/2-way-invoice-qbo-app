@@ -5,6 +5,7 @@ const alias = { "@": fileURLToPath(new URL("./src", import.meta.url)) };
 
 export default defineConfig({
   test: {
+    typecheck: { tsconfig: "./src/tests/tsconfig.json" },
     globals: true,
     environment: "node",
     include: ["src/tests/e2e/**/*.test.ts", "src/tests/unit/**/*.test.ts"],

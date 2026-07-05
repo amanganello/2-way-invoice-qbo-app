@@ -33,7 +33,7 @@ describe("Invoice routes", () => {
       })
     );
 
-    vi.doMock("@/infrastructure/queue/queues.js", () => ({
+    vi.doMock("@/infrastructure/queue/queues", () => ({
       syncQueue: {
         enqueueReconcile: vi.fn(async () => {}),
         enqueuePaymentSync: vi.fn(async () => {}),
