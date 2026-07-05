@@ -142,4 +142,31 @@ describe("pullInvoice", () => {
     await pullInvoice("qbo-1", "Update", "evt-1", deps as never);
     expect(deps.invoiceRepo.save).not.toHaveBeenCalled();
   });
+
+  it("does not false-conflict when snapshot has numeric amounts (legacy format)", async () => {
+    const deps = makeDeps();
+    (deps.syncLinkRepo.findByQboId as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeSyncLink({
+        lastSyncedSnapshot: {
+          customerId: "cust-1",
+          lineItems: [],
+          totalAmount: 100,       // old numeric format
+          currency: "USD",
+          status: "sent",
+          dueDate: new Date("2030-01-01").toISOString(),
+        },
+      })
+    );
+    (deps.invoiceRepo.findById as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeInvoice({ totalAmount: "100.00" })
+    );
+    (deps.qboInvoicePort.getInvoice as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeQBOResult({ invoice: makeInvoice({ totalAmount: "100.00", status: "paid" }) })
+    );
+    await pullInvoice("qbo-1", "Update", "evt-1", deps as never);
+    // Should not call setStatus with CONFLICT
+    expect(deps.syncLinkRepo.setStatus).not.toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), "CONFLICT", expect.anything()
+    );
+  });
 });

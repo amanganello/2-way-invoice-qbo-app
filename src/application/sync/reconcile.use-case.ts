@@ -178,7 +178,7 @@ export async function reconcileInvoice(internalId: string, deps: ReconcileDeps):
             : items;
         const lineItemsChanged =
           JSON.stringify(invoice.lineItems) !== JSON.stringify(normalizeLineItems(snap.lineItems));
-        const totalAmountChanged = Number(invoice.totalAmount) !== Number(snap.totalAmount);
+        const totalAmountChanged = invoice.totalAmount !== Number(snap.totalAmount).toFixed(2);
 
         if (lineItemsChanged || totalAmountChanged) {
           throw new ConflictError(

@@ -195,6 +195,38 @@ describe("reconcileInvoice", () => {
     );
   });
 
+  it("partially-paid guard: does not throw when totalAmount unchanged (numeric snapshot)", async () => {
+    const deps = makeDeps({
+      syncLinkRepo: {
+        ...makeDeps().syncLinkRepo,
+        findByInternalId: vi.fn(async () => makeSyncLink({
+          qboId: "qbo-1",
+          lastSyncedSnapshot: {
+            // old numeric format — pre-migration snapshot
+            totalAmount: 100,
+            lineItems: [{ description: "Service", quantity: 1, unitPrice: 100, amount: 100 }],
+            currency: "USD",
+            status: "sent",
+            customerId: "cust-1",
+            dueDate: new Date("2030-01-01").toISOString(),
+          },
+        })),
+      },
+      paymentSyncLinkRepo: {
+        findByInvoiceInternalId: vi.fn(async () => [{ id: "psl-1" }]),  // has payments
+      },
+      invoiceRepo: {
+        findById: vi.fn(async () => makeInvoice({
+          totalAmount: "100.00",  // string format
+          lineItems: [{ description: "Service", quantity: 1, unitPrice: "100.00", amount: "100.00" }],
+        })),
+        save: vi.fn(async (i: Invoice) => i),
+      },
+    });
+    // Should NOT throw — amounts are equal, just different formats
+    await expect(reconcileInvoice("inv-1", deps as never)).resolves.not.toThrow();
+  });
+
   it("allows update when only dueDate changed on a partially-paid invoice", async () => {
     const snapshot = {
       lineItems: [],

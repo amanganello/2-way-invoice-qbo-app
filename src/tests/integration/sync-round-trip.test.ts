@@ -134,7 +134,7 @@ describe("Integration: sync round-trips", () => {
   it("internal create → push to QBO → SyncLink created", async () => {
     const invoice = await invoiceRepo.save({
       id: "inv-integration-1", customerId: "cust-1", lineItems: [],
-      totalAmount: 100, currency: "USD", status: "sent",
+      totalAmount: "100.00", currency: "USD", status: "sent",
       dueDate: new Date("2030-01-01"), createdAt: new Date(), updatedAt: new Date(),
     });
 
@@ -151,13 +151,13 @@ describe("Integration: sync round-trips", () => {
     // Step 1: create and reconcile → SyncLink with SyncToken "0"
     const invoice = await invoiceRepo.save({
       id: "inv-integration-update", customerId: "cust-1", lineItems: [],
-      totalAmount: 100, currency: "USD", status: "sent",
+      totalAmount: "100.00", currency: "USD", status: "sent",
       dueDate: new Date("2030-01-01"), createdAt: new Date(), updatedAt: new Date(),
     });
     await reconcileInvoice(invoice.id, baseDeps);
 
     // Step 2: mutate the invoice
-    await invoiceRepo.save({ ...invoice, totalAmount: 200, updatedAt: new Date() });
+    await invoiceRepo.save({ ...invoice, totalAmount: "200.00", updatedAt: new Date() });
 
     // Step 3: reconcile again — SyncLink now exists → update path → ?operation=update
     await reconcileInvoice(invoice.id, baseDeps);
@@ -170,7 +170,7 @@ describe("Integration: sync round-trips", () => {
   it("webhook pull → internal invoice updated", async () => {
     const invoice = await invoiceRepo.save({
       id: "inv-integration-2", customerId: "cust-1", lineItems: [],
-      totalAmount: 100, currency: "USD", status: "sent",
+      totalAmount: "100.00", currency: "USD", status: "sent",
       dueDate: new Date("2030-01-01"), createdAt: new Date(), updatedAt: new Date(),
     });
     await reconcileInvoice(invoice.id, baseDeps);
@@ -188,7 +188,7 @@ describe("Integration: sync round-trips", () => {
   it("duplicate webhook → second event silently skipped (stale check)", async () => {
     const invoice = await invoiceRepo.save({
       id: "inv-integration-3", customerId: "cust-1", lineItems: [],
-      totalAmount: 100, currency: "USD", status: "sent",
+      totalAmount: "100.00", currency: "USD", status: "sent",
       dueDate: new Date("2030-01-01"), createdAt: new Date(), updatedAt: new Date(),
     });
     await reconcileInvoice(invoice.id, baseDeps);
@@ -241,7 +241,7 @@ describe("Integration: sync round-trips", () => {
   it("internal void → QBO void called", async () => {
     const invoice = await invoiceRepo.save({
       id: "inv-integration-4", customerId: "cust-1", lineItems: [],
-      totalAmount: 100, currency: "USD", status: "sent",
+      totalAmount: "100.00", currency: "USD", status: "sent",
       dueDate: new Date("2030-01-01"), createdAt: new Date(), updatedAt: new Date(),
     });
     await reconcileInvoice(invoice.id, baseDeps);
@@ -257,7 +257,7 @@ describe("Integration: sync round-trips", () => {
   it("QBO void webhook → internal invoice status set to void", async () => {
     const invoice = await invoiceRepo.save({
       id: "inv-integration-5", customerId: "cust-1", lineItems: [],
-      totalAmount: 100, currency: "USD", status: "sent",
+      totalAmount: "100.00", currency: "USD", status: "sent",
       dueDate: new Date("2030-01-01"), createdAt: new Date(), updatedAt: new Date(),
     });
     await reconcileInvoice(invoice.id, baseDeps);
@@ -276,7 +276,7 @@ describe("Integration: sync round-trips", () => {
     // After reconcile, lastSyncedSnapshot.dueDate = "2030-01-01T00:00:00.000Z"
     const invoice = await invoiceRepo.save({
       id: "inv-integration-conflict", customerId: "cust-1", lineItems: [],
-      totalAmount: 100, currency: "USD", status: "sent",
+      totalAmount: "100.00", currency: "USD", status: "sent",
       dueDate: new Date("2030-01-01"), createdAt: new Date(), updatedAt: new Date(),
     });
     await reconcileInvoice(invoice.id, baseDeps);
@@ -317,7 +317,7 @@ describe("Integration: sync round-trips", () => {
   it("payment sync → PaymentSyncLink created", async () => {
     const invoice = await invoiceRepo.save({
       id: "inv-integration-6", customerId: "cust-1", lineItems: [],
-      totalAmount: 100, currency: "USD", status: "sent",
+      totalAmount: "100.00", currency: "USD", status: "sent",
       dueDate: new Date("2030-01-01"), createdAt: new Date(), updatedAt: new Date(),
     });
     await reconcileInvoice(invoice.id, baseDeps);
@@ -348,7 +348,7 @@ describe("Integration: sync round-trips", () => {
   it("partially paid invoice edit → update blocked", async () => {
     const invoice = await invoiceRepo.save({
       id: "inv-integration-7", customerId: "cust-1", lineItems: [],
-      totalAmount: 100, currency: "USD", status: "sent",
+      totalAmount: "100.00", currency: "USD", status: "sent",
       dueDate: new Date("2030-01-01"), createdAt: new Date(), updatedAt: new Date(),
     });
     await reconcileInvoice(invoice.id, baseDeps);
@@ -360,7 +360,7 @@ describe("Integration: sync round-trips", () => {
     // Modify lineItems so the guard detects a change against lastSyncedSnapshot
     await invoiceRepo.save({
       ...invoice,
-      lineItems: [{ description: "new item", quantity: 1, unitPrice: 100, amount: 100 }],
+      lineItems: [{ description: "new item", quantity: 1, unitPrice: "100.00", amount: "100.00" }],
       updatedAt: new Date(),
     });
     // Now try to update — should throw ConflictError
