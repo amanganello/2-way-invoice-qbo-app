@@ -153,6 +153,14 @@ export const syncLinkRepository = {
     });
     return rows.map(toDomain);
   },
+
+  async findInvoicesWithoutSyncLink(): Promise<{ internalId: string }[]> {
+    const invoices = await prisma.invoice.findMany({
+      where: { syncLink: { is: null } },
+      select: { id: true },
+    });
+    return invoices.map(inv => ({ internalId: inv.id }));
+  },
 };
 
 export type SyncLinkRepository = typeof syncLinkRepository;

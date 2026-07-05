@@ -52,6 +52,7 @@ model Invoice {
   updatedAt   DateTime      @updatedAt
 
   payments Payment[]
+  syncLink SyncLink?
 
   @@index([customerId])
   @@index([status])
@@ -85,6 +86,7 @@ model SyncLink {
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
 
+  invoice   Invoice  @relation(fields: [internalId], references: [id])
   auditLogs AuditLog[]
 
   @@index([syncStatus])
