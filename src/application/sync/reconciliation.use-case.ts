@@ -4,6 +4,7 @@ import logger from "@/infrastructure/logger/index.js";
 export type ReconciliationDeps = {
   syncLinkRepo: Pick<SyncLinkRepository, "findStuckProcessing" | "findByStatuses" | "findUnsynced" | "findInvoicesWithoutSyncLink" | "setStatus">;
   enqueueReconcile: (internalId: string) => Promise<void>;
+  enqueueFailedPaymentRetries?: () => Promise<void>;
 };
 
 export async function runReconciliation(deps: ReconciliationDeps): Promise<void> {
@@ -34,6 +35,10 @@ export async function runReconciliation(deps: ReconciliationDeps): Promise<void>
     seen.add(link.internalId);
     // BullMQ jobId deduplication: if job already waiting/active, this is silently dropped
     await enqueueReconcile(link.internalId);
+  }
+
+  if (deps.enqueueFailedPaymentRetries) {
+    await deps.enqueueFailedPaymentRetries();
   }
 
   logger.info(

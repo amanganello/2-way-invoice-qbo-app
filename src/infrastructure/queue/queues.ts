@@ -17,7 +17,7 @@ export const invoiceSyncQueue = new Queue("invoice-sync", {
 
 export const paymentSyncQueue = new Queue("payment-sync", {
   connection: redisConnection,
-  defaultJobOptions,
+  defaultJobOptions: { ...defaultJobOptions, removeOnFail: { count: 100 } },
 });
 
 export const reconciliationQueue = new Queue("reconciliation", {
