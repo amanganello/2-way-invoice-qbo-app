@@ -46,4 +46,27 @@ describe("runReconciliation", () => {
     await runReconciliation(deps as never);
     expect(deps.enqueueReconcile).toHaveBeenCalledWith("inv-new");
   });
+
+  it("enqueues orphaned invoice (no SyncLink row at all)", async () => {
+    const deps = makeDeps();
+    (deps.syncLinkRepo.findByStatuses as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (deps.syncLinkRepo.findUnsynced as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (deps.syncLinkRepo.findInvoicesWithoutSyncLink as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { internalId: "inv-orphan" },
+    ]);
+    await runReconciliation(deps as never);
+    expect(deps.enqueueReconcile).toHaveBeenCalledWith("inv-orphan");
+  });
+
+  it("calls enqueueFailedPaymentRetries when provided", async () => {
+    const retryFn = vi.fn(async () => {});
+    const deps = { ...makeDeps(), enqueueFailedPaymentRetries: retryFn };
+    await runReconciliation(deps as never);
+    expect(retryFn).toHaveBeenCalledOnce();
+  });
+
+  it("does not throw when enqueueFailedPaymentRetries is not provided", async () => {
+    const deps = makeDeps();
+    await expect(runReconciliation(deps as never)).resolves.not.toThrow();
+  });
 });

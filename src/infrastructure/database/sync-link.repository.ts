@@ -149,7 +149,10 @@ export const syncLinkRepository = {
 
   async findUnsynced(): Promise<SyncLinkRecord[]> {
     const rows = await prisma.syncLink.findMany({
-      where: { lastSyncedAt: null },
+      where: {
+        lastSyncedAt: null,
+        syncStatus: { notIn: ["CONFLICT", "PROCESSING"] },
+      },
     });
     return rows.map(toDomain);
   },
