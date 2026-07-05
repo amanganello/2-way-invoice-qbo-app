@@ -1,6 +1,13 @@
-import { InvoiceStatus as PrismaInvoiceStatus, type Invoice as PrismaInvoice, Prisma } from "@prisma/client";
+import { InvoiceStatus as PrismaInvoiceStatus, type Invoice as PrismaInvoice, type Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
-import type { Invoice, InvoiceLineItem, InvoiceStatus, InvoiceRepository } from "../../domain/invoices/invoice.types.js";
+import {
+  CurrencyCodeSchema,
+  InvoiceLineItemSchema,
+  MoneySchema,
+  type Invoice,
+  type InvoiceRepository,
+  type InvoiceStatus,
+} from "../../domain/invoices/invoice.types.js";
 
 const STATUS_TO_PRISMA: Record<InvoiceStatus, PrismaInvoiceStatus> = {
   draft: PrismaInvoiceStatus.DRAFT,
@@ -19,22 +26,13 @@ const STATUS_TO_DOMAIN: Record<PrismaInvoiceStatus, InvoiceStatus> = {
 };
 
 function toDomain(row: PrismaInvoice): Invoice {
+  const lineItems = InvoiceLineItemSchema.array().parse(row.lineItems);
   return {
     id: row.id,
     customerId: row.customerId,
-    lineItems: (row.lineItems as Array<{
-      description: string; quantity: number; unitPrice: number | string;
-      amount: number | string; internalItemCode?: string; internalAccountCode?: string;
-    }>).map(li => ({
-      description: li.description,
-      quantity: li.quantity,
-      unitPrice: Number(li.unitPrice).toFixed(2),
-      amount: Number(li.amount).toFixed(2),
-      ...(li.internalItemCode ? { internalItemCode: li.internalItemCode } : {}),
-      ...(li.internalAccountCode ? { internalAccountCode: li.internalAccountCode } : {}),
-    })),
-    totalAmount: row.totalAmount.toFixed(2),
-    currency: row.currency,
+    lineItems,
+    totalAmount: MoneySchema.parse(row.totalAmount.toFixed(2)),
+    currency: CurrencyCodeSchema.parse(row.currency),
     status: STATUS_TO_DOMAIN[row.status],
     dueDate: row.dueDate,
     createdAt: row.createdAt,
@@ -48,8 +46,12 @@ export class PrismaInvoiceRepository implements InvoiceRepository {
     return row ? toDomain(row) : null;
   }
 
-  async findAll(): Promise<Invoice[]> {
-    const rows = await prisma.invoice.findMany({ orderBy: { createdAt: 'desc' } });
+  async findAll(params: { limit?: number; cursor?: string } = {}): Promise<Invoice[]> {
+    const rows = await prisma.invoice.findMany({
+      orderBy: { createdAt: "desc" },
+      take: params.limit ?? 50,
+      ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
+    });
     return rows.map(toDomain);
   }
 

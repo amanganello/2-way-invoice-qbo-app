@@ -1,52 +1,33 @@
 import type { Invoice, InvoiceRepository, QBOInvoicePort, QBOSyncContext } from "@/domain/invoices/invoice.types.js";
-import type { SyncLinkRepository, SyncLinkRecord } from "@/infrastructure/database/sync-link.repository.js";
+import type {
+  AccountMapPort,
+  AuditLogPort,
+  CustomerMapPort,
+  ItemMapPort,
+  PaymentSyncLinkPort,
+  SyncLinkPort,
+  SyncLinkRecord,
+} from "@/application/ports/sync.ports.js";
 import { ExternalServiceError, ConflictError } from "@/shared/errors/app-error.js";
 import logger from "@/infrastructure/logger/index.js";
-
-// Inline port types — the infra repositories satisfy these shapes
-type PaymentSyncLinkPort = {
-  findByInvoiceInternalId: (invoiceInternalId: string) => Promise<Array<{ id: string }>>;
-};
-
-type AuditLogPort = {
-  create: (data: {
-    syncLinkId?: string;
-    action: string;
-    sourceEventId: string;
-    beforeState?: Record<string, unknown>;
-    afterState?: Record<string, unknown>;
-    result: "SUCCESS" | "FAILURE";
-    error?: string;
-  }) => Promise<void>;
-};
+import { invoiceToSnapshot, parseInvoiceSnapshot } from "./invoice-snapshot.js";
 
 export type ReconcileDeps = {
   invoiceRepo: InvoiceRepository;
-  syncLinkRepo: SyncLinkRepository;
+  syncLinkRepo: SyncLinkPort;
   paymentSyncLinkRepo: PaymentSyncLinkPort;
   // accountMapRepo: used to resolve internalAccountCode → qboAccountId per line item.
   // When a line item has internalAccountCode set, the mapped qboAccountId is included
   // as AccountRef in the QBO line (SalesItemLineDetail). Missing entries are an error.
-  accountMapRepo: { findByInternalCode: (code: string) => Promise<{ qboAccountId: string } | null> };
-  itemMapRepo: { findByInternalCode: (code: string) => Promise<{ qboItemId: string; defaultTaxCode: string } | null> };
-  customerMapRepo: { findByInternalId: (id: string) => Promise<{ qboCustomerId: string } | null> };
+  accountMapRepo: AccountMapPort;
+  itemMapRepo: ItemMapPort;
+  customerMapRepo: CustomerMapPort;
   qboInvoicePort: QBOInvoicePort;
   auditLogRepo: AuditLogPort;
   qbDefaultCustomerId?: string;
   qbDefaultItemId?: string;
   qbEnvironment: string;
 };
-
-function invoiceToSnapshot(invoice: Invoice): Record<string, unknown> {
-  return {
-    customerId: invoice.customerId,
-    lineItems: invoice.lineItems,
-    totalAmount: invoice.totalAmount,
-    currency: invoice.currency,
-    status: invoice.status,
-    dueDate: invoice.dueDate instanceof Date ? invoice.dueDate.toISOString() : invoice.dueDate,
-  };
-}
 
 export async function reconcileInvoice(internalId: string, deps: ReconcileDeps): Promise<void> {
   const {
@@ -166,7 +147,7 @@ export async function reconcileInvoice(internalId: string, deps: ReconcileDeps):
     if (hasQboId && syncLink) {
       const payments = await paymentSyncLinkRepo.findByInvoiceInternalId(internalId);
       if (payments.length > 0 && syncLink.lastSyncedSnapshot) {
-        const snap = syncLink.lastSyncedSnapshot as Record<string, unknown>;
+        const snap = parseInvoiceSnapshot(syncLink.lastSyncedSnapshot);
         const normalizeLineItems = (items: unknown) =>
           Array.isArray(items)
             ? (items as Array<{ description: string; quantity: number; unitPrice: number | string; amount: number | string; [key: string]: unknown }>)

@@ -1,18 +1,8 @@
 import { prisma } from "./prisma.js";
 import type { SyncStatus } from "@prisma/client";
+import type { PaymentSyncLinkPort, PaymentSyncLinkRecord } from "@/application/ports/sync.ports.js";
 
-export type PaymentSyncLinkRecord = {
-  id: string;
-  internalId: string;
-  qboId: string;
-  invoiceInternalId: string;
-  syncStatus: "SYNCED" | "PENDING" | "ERROR";
-  lastSyncedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-export const paymentSyncLinkRepository = {
+export const paymentSyncLinkRepository: PaymentSyncLinkPort = {
   async findByInternalId(internalId: string): Promise<PaymentSyncLinkRecord | null> {
     const row = await prisma.paymentSyncLink.findUnique({ where: { internalId } });
     return row as PaymentSyncLinkRecord | null;

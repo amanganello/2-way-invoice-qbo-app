@@ -5,6 +5,7 @@ export const SyncStatusSchema = z.enum(["SYNCED", "PENDING", "PROCESSING", "CONF
 export const SyncLinksQuerySchema = z.object({
   syncStatus: SyncStatusSchema.optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
+  cursor: z.string().min(1).optional(),
 });
 
 export const SyncLinkParamsSchema = z.object({ id: z.string().min(1) });

@@ -11,6 +11,8 @@ const BASE_URLS = {
 
 const REFRESH_BEFORE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 const REFRESH_TOKEN_WARN_DAYS = 14;
+const REQUEST_TIMEOUT_MS = 10_000;
+const MAX_REQUEST_ATTEMPTS = 3;
 
 export class QBOClient {
   private baseUrl: string;
@@ -25,39 +27,79 @@ export class QBOClient {
     this.baseUrl = `${BASE_URLS[env.QB_ENVIRONMENT]}/${env.QB_REALM_ID}`;
   }
 
-  async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  async request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    parse?: (json: unknown) => T
+  ): Promise<T> {
+    return this.requestWithRetry(method, path, body, parse, 1);
+  }
+
+  private async requestWithRetry<T>(
+    method: string,
+    path: string,
+    body: unknown,
+    parse: ((json: unknown) => T) | undefined,
+    attempt: number
+  ): Promise<T> {
     const accessToken = await this.getValidAccessToken();
     const url = `${this.baseUrl}${path}`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-    const response = await fetch(url, {
-      method,
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      body: body != null ? JSON.stringify(body) : undefined,
-    });
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: body != null ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
 
-    if (response.status === 429) {
-      const retryAfter = response.headers.get("Retry-After") ?? "60";
-      logger.warn({ retryAfter }, "QBO rate limit hit (429) — backing off");
-      throw new ExternalServiceError(`QBO rate limited; retry after ${retryAfter}s`);
+      const text = await response.text();
+      const json = this.parseResponseBody(text, response.status);
+
+      if (response.status === 429) {
+        const retryAfter = response.headers.get("Retry-After") ?? "60";
+        logger.warn({ retryAfter, attempt }, "QBO rate limit hit (429)");
+        if (attempt < MAX_REQUEST_ATTEMPTS) {
+          await this.delay(Math.min(Number(retryAfter) * 1000 || 1000, 5000));
+          return this.requestWithRetry(method, path, body, parse, attempt + 1);
+        }
+        throw new ExternalServiceError(`QBO rate limited; retry after ${retryAfter}s`);
+      }
+
+      if (this.isQboFault(json)) {
+        const err = json.Fault.Error[0];
+        throw new ExternalServiceError(`QBO API fault: ${err.Message}`);
+      }
+
+      if (!response.ok) {
+        if (this.isTransientStatus(response.status) && attempt < MAX_REQUEST_ATTEMPTS) {
+          await this.delay(1000 * attempt);
+          return this.requestWithRetry(method, path, body, parse, attempt + 1);
+        }
+        throw new ExternalServiceError(`QBO API error: ${response.status}`);
+      }
+
+      return parse ? parse(json) : json as T;
+    } catch (err) {
+      if (err instanceof ExternalServiceError) throw err;
+      if (err instanceof Error && err.name === "AbortError") {
+        if (attempt < MAX_REQUEST_ATTEMPTS) {
+          await this.delay(1000 * attempt);
+          return this.requestWithRetry(method, path, body, parse, attempt + 1);
+        }
+        throw new ExternalServiceError("QBO API request timed out");
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeout);
     }
-
-    const json = await response.json() as T | QBOFault;
-
-    if ("Fault" in (json as object)) {
-      const fault = json as QBOFault;
-      const err = fault.Fault.Error[0];
-      throw new ExternalServiceError(`QBO API fault: ${err.Message}`);
-    }
-
-    if (!response.ok) {
-      throw new ExternalServiceError(`QBO API error: ${response.status}`);
-    }
-
-    return json as T;
   }
 
   async query<T>(query: string): Promise<T[]> {
@@ -139,6 +181,32 @@ export class QBOClient {
     if (daysLeft < REFRESH_TOKEN_WARN_DAYS) {
       logger.warn({ daysLeft: Math.floor(daysLeft) }, "QBO refresh token expiring soon — re-run scripts/qbo-auth.ts");
     }
+  }
+
+  private parseResponseBody(text: string, status: number): unknown {
+    if (!text) return {};
+    try {
+      return JSON.parse(text) as unknown;
+    } catch {
+      throw new ExternalServiceError(`QBO API returned invalid JSON (${status})`);
+    }
+  }
+
+  private isQboFault(json: unknown): json is QBOFault {
+    return Boolean(
+      json &&
+      typeof json === "object" &&
+      "Fault" in json &&
+      Array.isArray((json as QBOFault).Fault?.Error)
+    );
+  }
+
+  private isTransientStatus(status: number): boolean {
+    return status === 408 || status === 425 || status === 500 || status === 502 || status === 503 || status === 504;
+  }
+
+  private async delay(ms: number): Promise<void> {
+    await new Promise(resolve => setTimeout(resolve, ms));
   }
 }
 

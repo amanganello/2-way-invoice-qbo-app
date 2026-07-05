@@ -1,97 +1,60 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { prisma } from "@/infrastructure/database/prisma.js";
-import { syncLinkRepository } from "@/infrastructure/database/sync-link.repository.js";
-import { auditLogRepository } from "@/infrastructure/database/audit-log.repository.js";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { accountMapRepository } from "@/infrastructure/database/account-map.repository.js";
-import { itemMapRepository } from "@/infrastructure/database/item-map.repository.js";
+import { auditLogRepository } from "@/infrastructure/database/audit-log.repository.js";
 import { customerMapRepository } from "@/infrastructure/database/customer-map.repository.js";
-import { qboClient } from "@/infrastructure/qbo/qbo.client.js";
-import { invoiceSyncQueue } from "@/infrastructure/queue/queues.js";
-import { QBOInvoiceAdapter } from "@/infrastructure/qbo/qbo-invoice.adapter.js";
-import type { SyncStatus } from "@prisma/client";
-import type { QBOAccount, QBOItem, QBOCustomer } from "@/infrastructure/qbo/qbo.types.js";
-import { SyncLinksQuerySchema, SyncLinkParamsSchema, ResolveConflictSchema } from "./sync.schemas.js";
-import { NotFoundError } from "@/shared/errors/app-error.js";
-import { PrismaInvoiceRepository } from "@/infrastructure/database/invoice.repository.js";
+import { itemMapRepository } from "@/infrastructure/database/item-map.repository.js";
+import { syncLinkRepository } from "@/infrastructure/database/sync-link.repository.js";
+import { syncQueue } from "@/infrastructure/queue/queues.js";
+import { QBOCatalogAdapter } from "@/infrastructure/qbo/qbo-catalog.adapter.js";
+import {
+  getSyncLinkDetail,
+  importQboMappings,
+  listConflicts,
+  listMappings,
+  listSyncLinks,
+  resolveConflict,
+  runInitialInternalLoad,
+  type SyncManagementDeps,
+} from "@/application/sync/sync-management.use-cases.js";
+import { ResolveConflictSchema, SyncLinkParamsSchema, SyncLinksQuerySchema } from "./sync.schemas.js";
 
-const invoiceRepo = new PrismaInvoiceRepository();
+const deps: SyncManagementDeps = {
+  syncLinkRepo: syncLinkRepository,
+  auditLogRepo: auditLogRepository,
+  queue: syncQueue,
+  qboCatalog: new QBOCatalogAdapter(),
+  accountMapRepo: accountMapRepository,
+  itemMapRepo: itemMapRepository,
+  customerMapRepo: customerMapRepository,
+};
 
 export async function registerSyncRoutes(app: FastifyInstance): Promise<void> {
-  // GET /sync/links
   app.get("/sync/links", async (request: FastifyRequest, reply: FastifyReply) => {
-    const { syncStatus, limit } = SyncLinksQuerySchema.parse(request.query);
-    const rows = await prisma.syncLink.findMany({
-      where: syncStatus ? { syncStatus: syncStatus as SyncStatus } : undefined,
-      orderBy: { createdAt: "desc" },
-      take: limit,
-    });
-    return reply.send(rows);
+    const query = SyncLinksQuerySchema.parse(request.query);
+    return reply.send(await listSyncLinks(deps, query));
   });
 
-  // GET /sync/links/:id
   app.get("/sync/links/:id", async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = SyncLinkParamsSchema.parse(request.params);
-    const row = await prisma.syncLink.findUnique({ where: { id } });
-    if (!row) throw new NotFoundError(`SyncLink ${id} not found`);
-    const logs = await auditLogRepository.findBySyncLinkId(id);
-    return reply.send({ ...row, auditLogs: logs });
+    return reply.send(await getSyncLinkDetail(deps, id));
   });
 
-  // GET /sync/conflicts
   app.get("/sync/conflicts", async (request: FastifyRequest, reply: FastifyReply) => {
     const { limit } = SyncLinksQuerySchema.parse(request.query);
-    const rows = await prisma.syncLink.findMany({
-      where: { syncStatus: "CONFLICT" },
-      orderBy: { createdAt: "desc" },
-      take: limit,
-      include: { auditLogs: { orderBy: { createdAt: "desc" }, take: 1 } },
-    });
-    return reply.send(rows);
+    return reply.send(await listConflicts(deps, limit));
   });
 
-  // POST /sync/conflicts/:id/resolve
   app.post("/sync/conflicts/:id/resolve", async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = SyncLinkParamsSchema.parse(request.params);
     const { strategy } = ResolveConflictSchema.parse(request.body);
-
-    const syncLink = await prisma.syncLink.findUnique({ where: { id } });
-    if (!syncLink || syncLink.syncStatus !== "CONFLICT") {
-      throw new NotFoundError(`No CONFLICT SyncLink with id ${id}`);
-    }
-
-    // Apply chosen strategy
-    if (strategy === "accept-internal") {
-      await syncLinkRepository.setStatus(syncLink.id, syncLink.version, "PENDING", {});
-      // Re-trigger sync to push internal data to QBO
-      await invoiceSyncQueue.add("reconcile", { internalId: syncLink.internalId }, { jobId: `reconcile-${syncLink.internalId}` });
-    } else {
-      // accept-qbo: QBO state is already correct, no push needed
-      await syncLinkRepository.setStatus(syncLink.id, syncLink.version, "SYNCED", {});
-    }
-
-    return reply.send({ ok: true, strategy, internalId: syncLink.internalId });
+    return reply.send(await resolveConflict(deps, id, strategy));
   });
 
-  // POST /sync/initial-load/internal-to-qbo
-  app.post("/sync/initial-load/internal-to-qbo", async (_request: FastifyRequest, reply: FastifyReply) => {
-    const invoices = await prisma.invoice.findMany();
-    let enqueued = 0;
-    let skipped = 0;
-
-    for (const invoice of invoices) {
-      const existing = await syncLinkRepository.findByInternalId(invoice.id);
-      if (existing) { skipped++; continue; }
-
-      // Write SyncLink PENDING first, then enqueue
-      await syncLinkRepository.create({ internalId: invoice.id, internalUpdatedAt: invoice.updatedAt, syncStatus: "PENDING" });
-      await invoiceSyncQueue.add("reconcile", { internalId: invoice.id }, { jobId: `reconcile-${invoice.id}` });
-      enqueued++;
-    }
-
-    return reply.send({ enqueued, skipped });
+  app.post("/sync/initial-load/internal-to-qbo", async (request: FastifyRequest, reply: FastifyReply) => {
+    const { limit } = SyncLinksQuerySchema.parse(request.query);
+    return reply.send(await runInitialInternalLoad(deps, limit));
   });
 
-  // POST /sync/initial-load/qbo-to-internal — not implemented
   app.post("/sync/initial-load/qbo-to-internal", async (_request: FastifyRequest, reply: FastifyReply) => {
     return reply.status(501).send({
       error: "NotImplemented",
@@ -100,53 +63,11 @@ export async function registerSyncRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // POST /sync/mappings/import
   app.post("/sync/mappings/import", async (_request: FastifyRequest, reply: FastifyReply) => {
-    type AccountQueryShape = { QueryResponse: { Account?: QBOAccount[] } };
-    type ItemQueryShape = { QueryResponse: { Item?: QBOItem[] } };
-    type CustomerQueryShape = { QueryResponse: { Customer?: QBOCustomer[] } };
-
-    const [accountsRaw, itemsRaw, customersRaw] = await Promise.all([
-      qboClient.request<AccountQueryShape>("GET", `/query?query=${encodeURIComponent("SELECT * FROM Account WHERE AccountType='Income'")}&minorversion=65`),
-      qboClient.request<ItemQueryShape>("GET", `/query?query=${encodeURIComponent("SELECT * FROM Item")}&minorversion=65`),
-      qboClient.request<CustomerQueryShape>("GET", `/query?query=${encodeURIComponent("SELECT * FROM Customer WHERE Active=true")}&minorversion=65`),
-    ]);
-
-    const accountsImported = await accountMapRepository.upsertMany(
-      (accountsRaw.QueryResponse.Account ?? []).map(a => ({
-        internalAccountCode: a.FullyQualifiedName,
-        qboAccountId: a.Id,
-        qboAccountName: a.Name,
-      }))
-    );
-
-    const itemsImported = await itemMapRepository.upsertMany(
-      (itemsRaw.QueryResponse.Item ?? []).map(i => ({
-        internalItemCode: i.Name,
-        qboItemId: i.Id,
-        qboItemName: i.Name,
-        defaultTaxCode: i.TaxCodeRef?.value ?? "NON",
-      }))
-    );
-
-    const customersImported = await customerMapRepository.upsertMany(
-      (customersRaw.QueryResponse.Customer ?? []).map(c => ({
-        internalCustomerId: c.Id,
-        qboCustomerId: c.Id,
-        qboCustomerName: c.DisplayName,
-      }))
-    );
-
-    return reply.send({ accountsImported, itemsImported, customersImported });
+    return reply.send(await importQboMappings(deps));
   });
 
-  // GET /sync/mappings
   app.get("/sync/mappings", async (_request: FastifyRequest, reply: FastifyReply) => {
-    const [accounts, items, customers] = await Promise.all([
-      accountMapRepository.findAll(),
-      itemMapRepository.findAll(),
-      customerMapRepository.findAll(),
-    ]);
-    return reply.send({ accounts, items, customers });
+    return reply.send(await listMappings(deps));
   });
 }

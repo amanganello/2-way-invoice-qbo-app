@@ -1,12 +1,7 @@
 import { prisma } from "./prisma.js";
+import type { AccountMapEntry, AccountMapPort } from "@/application/ports/sync.ports.js";
 
-export type AccountMapEntry = {
-  internalAccountCode: string;
-  qboAccountId: string;
-  qboAccountName: string;
-};
-
-export const accountMapRepository = {
+export const accountMapRepository: AccountMapPort = {
   async findByInternalCode(code: string): Promise<AccountMapEntry | null> {
     return prisma.accountMap.findUnique({ where: { internalAccountCode: code } });
   },

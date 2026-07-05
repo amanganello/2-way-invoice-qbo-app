@@ -1,22 +1,21 @@
 import type { PaymentRepository, InvoiceRepository, QBOPaymentPort } from "@/domain/invoices/invoice.types.js";
-// ARCHITECTURE NOTE: PaymentSyncLinkRepository, SyncLinkRepository, and AuditLogRepository
-// are imported from infrastructure/ into the application layer. These are type-only imports
-// used structurally — no concrete infrastructure code executes here. See README "Known
-// Limitations" and pull.use-case.ts for the same pattern and rationale.
-import type { PaymentSyncLinkRepository } from "@/infrastructure/database/payment-sync-link.repository.js";
-import type { SyncLinkRepository } from "@/infrastructure/database/sync-link.repository.js";
-import type { AuditLogRepository } from "@/infrastructure/database/audit-log.repository.js";
+import type {
+  AuditLogPort,
+  CustomerMapPort,
+  PaymentSyncLinkPort,
+  SyncLinkPort,
+} from "@/application/ports/sync.ports.js";
 import logger from "@/infrastructure/logger/index.js";
 import { ExternalServiceError } from "@/shared/errors/app-error.js";
 
 export type PaymentSyncDeps = {
   paymentRepo: PaymentRepository;
   invoiceRepo: InvoiceRepository; // needed to resolve customerId for CustomerMap lookup
-  paymentSyncLinkRepo: PaymentSyncLinkRepository;
-  syncLinkRepo: SyncLinkRepository;
-  customerMapRepo: { findByInternalId: (id: string) => Promise<{ qboCustomerId: string } | null> };
+  paymentSyncLinkRepo: PaymentSyncLinkPort;
+  syncLinkRepo: SyncLinkPort;
+  customerMapRepo: CustomerMapPort;
   qboPaymentPort: QBOPaymentPort;
-  auditLogRepo: AuditLogRepository;
+  auditLogRepo: AuditLogPort;
   qbDefaultCustomerId?: string;
   qbEnvironment: string;
 };

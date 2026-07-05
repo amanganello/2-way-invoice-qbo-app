@@ -1,12 +1,7 @@
 import { prisma } from "./prisma.js";
+import type { CustomerMapEntry, CustomerMapPort } from "@/application/ports/sync.ports.js";
 
-export type CustomerMapEntry = {
-  internalCustomerId: string;
-  qboCustomerId: string;
-  qboCustomerName: string;
-};
-
-export const customerMapRepository = {
+export const customerMapRepository: CustomerMapPort = {
   async findByInternalId(id: string): Promise<CustomerMapEntry | null> {
     return prisma.customerMap.findUnique({ where: { internalCustomerId: id } });
   },

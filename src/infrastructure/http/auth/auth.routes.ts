@@ -3,25 +3,11 @@ import { randomUUID } from "node:crypto";
 import OAuthClient from "intuit-oauth";
 import { env } from "@/config/env.js";
 import { qboCredentialsRepository } from "@/infrastructure/database/qbo-credentials.repository.js";
-import { redisConnection } from "@/infrastructure/queue/redis.js";
 import logger from "@/infrastructure/logger/index.js";
+import type { OAuthStateStorePort } from "@/application/ports/auth.ports.js";
+import { RedisOAuthStateStore } from "./oauth-state-store.js";
 
 const REFRESH_TOKEN_WARN_DAYS = 14;
-const OAUTH_STATE_TTL_SECONDS = 10 * 60;
-
-type StateEntry = { frontendUrl: string };
-
-async function storeOAuthState(state: string, entry: StateEntry): Promise<void> {
-  await redisConnection.set(`oauth:state:${state}`, JSON.stringify(entry), "EX", OAUTH_STATE_TTL_SECONDS);
-}
-
-async function consumeOAuthState(state: string): Promise<StateEntry | null> {
-  const key = `oauth:state:${state}`;
-  const raw = await redisConnection.get(key);
-  if (!raw) return null;
-  await redisConnection.del(key);
-  return JSON.parse(raw) as StateEntry;
-}
 
 function makeOAuthClient() {
   return new OAuthClient({
@@ -32,7 +18,13 @@ function makeOAuthClient() {
   });
 }
 
-export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
+export type AuthRouteDeps = {
+  oauthStateStore?: OAuthStateStorePort;
+};
+
+export async function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps = {}): Promise<void> {
+  const oauthStateStore = deps.oauthStateStore ?? new RedisOAuthStateStore();
+
   app.get("/auth/qbo/status", async (_request: FastifyRequest, reply: FastifyReply) => {
     const creds = await qboCredentialsRepository.get();
 
@@ -66,7 +58,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.get("/auth/qbo/start", async (_request: FastifyRequest, reply: FastifyReply) => {
     const state = randomUUID();
     const frontendUrl = env.FRONTEND_URL;
-    await storeOAuthState(state, { frontendUrl });
+    await oauthStateStore.store(state, { frontendUrl });
 
     const client = makeOAuthClient();
     const authUri = client.authorizeUri({
@@ -81,7 +73,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.get("/auth/qbo/callback", async (request: FastifyRequest, reply: FastifyReply) => {
     const { code, state, realmId } = request.query as Record<string, string>;
 
-    const entry = await consumeOAuthState(state ?? "");
+    const entry = await oauthStateStore.consume(state ?? "");
     if (!entry) {
       return reply.status(400).send({ error: "Invalid or expired OAuth state" });
     }
@@ -114,9 +106,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       logger.info("QBO OAuth tokens saved via browser flow");
       return reply.redirect(`${frontendUrl}?auth=success`);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "unknown error";
       logger.error({ err }, "QBO OAuth callback failed");
-      return reply.redirect(`${frontendUrl}?auth=error&message=${encodeURIComponent(msg)}`);
+      return reply.redirect(`${frontendUrl}?auth=error&message=${encodeURIComponent("QBO authorization failed")}`);
     }
   });
 }

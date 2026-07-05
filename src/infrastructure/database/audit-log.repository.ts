@@ -1,19 +1,8 @@
 import { prisma } from "./prisma.js";
 import type { AuditResult } from "@prisma/client";
+import type { AuditLogPort, AuditLogRecord } from "@/application/ports/sync.ports.js";
 
-export type AuditLogRecord = {
-  id: string;
-  syncLinkId: string | null;
-  action: string;
-  sourceEventId: string;
-  beforeState: Record<string, unknown> | null;
-  afterState: Record<string, unknown> | null;
-  result: "SUCCESS" | "FAILURE";
-  error: string | null;
-  createdAt: Date;
-};
-
-export const auditLogRepository = {
+export const auditLogRepository: AuditLogPort = {
   async create(data: {
     syncLinkId?: string;
     action: string;

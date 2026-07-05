@@ -120,10 +120,10 @@ export function SyncLinks() {
                     <div key={log.id} className="rounded border p-3 text-xs">
                       <div className="flex items-center justify-between">
                         <span className="font-medium">{log.action}</span>
-                        <span className={`font-medium ${log.result === 'success' ? 'text-green-700' : 'text-red-700'}`}>{log.result}</span>
+                        <span className={`font-medium ${log.result === 'SUCCESS' ? 'text-green-700' : 'text-red-700'}`}>{log.result}</span>
                       </div>
                       <p className="mt-1 text-gray-500">{new Date(log.createdAt).toLocaleString()}</p>
-                      {log.errorMessage && <p className="mt-1 text-red-600">{log.errorMessage}</p>}
+                      {log.error && <p className="mt-1 text-red-600">{log.error}</p>}
                       {log.beforeState != null && (
                         <div className="mt-2">
                           <p className="mb-1 font-medium text-gray-600">Before state:</p>

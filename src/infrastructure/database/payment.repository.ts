@@ -1,13 +1,13 @@
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
-import type { Payment, PaymentRepository } from "@/domain/invoices/invoice.types.js";
+import { CurrencyCodeSchema, MoneySchema, type Payment, type PaymentRepository } from "@/domain/invoices/invoice.types.js";
 
 function toDomain(row: { id: string; invoiceId: string; amount: Prisma.Decimal; currency: string; paidAt: Date; createdAt: Date; updatedAt: Date }): Payment {
   return {
     id: row.id,
     invoiceId: row.invoiceId,
-    amount: row.amount.toFixed(2),
-    currency: row.currency,
+    amount: MoneySchema.parse(row.amount.toFixed(2)),
+    currency: CurrencyCodeSchema.parse(row.currency),
     paidAt: row.paidAt,
   };
 }

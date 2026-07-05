@@ -25,8 +25,8 @@ export function apiKeyMiddleware(
     return done();
   }
 
-  // Accept key from Authorization header (primary) or ?apiKey= query param
-  // (fallback for browser redirects like /auth/qbo/start where <a> can't set headers)
+  // Accept Authorization header everywhere. Temporarily keep ?apiKey= only for
+  // the OAuth start redirect, where browser navigation cannot set headers.
   const auth = request.headers["authorization"];
   if (auth?.startsWith("Bearer ")) {
     if (keyMatches(auth.slice(7))) return done();
@@ -34,8 +34,10 @@ export function apiKeyMiddleware(
     return;
   }
 
-  const queryKey = (request.query as Record<string, string>)["apiKey"] ?? "";
-  if (queryKey && keyMatches(queryKey)) return done();
+  if (request.url.startsWith("/auth/qbo/start")) {
+    const queryKey = (request.query as Record<string, string>)["apiKey"] ?? "";
+    if (queryKey && keyMatches(queryKey)) return done();
+  }
 
   reply.status(401).send({ error: "Unauthorized" });
 }

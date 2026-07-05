@@ -1,13 +1,7 @@
 import { prisma } from "./prisma.js";
+import type { ItemMapEntry, ItemMapPort } from "@/application/ports/sync.ports.js";
 
-export type ItemMapEntry = {
-  internalItemCode: string;
-  qboItemId: string;
-  qboItemName: string;
-  defaultTaxCode: string;
-};
-
-export const itemMapRepository = {
+export const itemMapRepository: ItemMapPort = {
   async findByInternalCode(code: string): Promise<ItemMapEntry | null> {
     return prisma.itemMap.findUnique({ where: { internalItemCode: code } });
   },

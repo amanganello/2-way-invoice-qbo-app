@@ -1,57 +1,15 @@
-import type { Invoice, InvoiceRepository, QBOInvoicePort, InvoiceStatus } from "@/domain/invoices/invoice.types.js";
-// ARCHITECTURE NOTE: SyncLinkRepository and AuditLogRepository are imported from
-// infrastructure/ into the application layer. This is a pragmatic compromise — both
-// types are used structurally (duck typing via type imports, no concrete code executes).
-// The strict approach is to define port interfaces for every repository in domain/.
-// See README "Known Limitations" for context. Do not import concrete classes here.
-import type { SyncLinkRepository } from "@/infrastructure/database/sync-link.repository.js";
-import type { AuditLogRepository } from "@/infrastructure/database/audit-log.repository.js";
+import type { InvoiceRepository, QBOInvoicePort } from "@/domain/invoices/invoice.types.js";
+import type { AuditLogPort, SyncLinkPort } from "@/application/ports/sync.ports.js";
 import { detectConflicts } from "./conflict-detection.js";
 import logger from "@/infrastructure/logger/index.js";
+import { invoiceToSnapshot, snapshotToInvoice } from "./invoice-snapshot.js";
 
 export type PullDeps = {
   invoiceRepo: InvoiceRepository;
-  syncLinkRepo: SyncLinkRepository;
+  syncLinkRepo: SyncLinkPort;
   qboInvoicePort: QBOInvoicePort;
-  auditLogRepo: AuditLogRepository;
+  auditLogRepo: AuditLogPort;
 };
-
-function invoiceToSnapshot(invoice: Invoice): Record<string, unknown> {
-  return {
-    customerId: invoice.customerId,
-    lineItems: invoice.lineItems,
-    totalAmount: invoice.totalAmount,
-    currency: invoice.currency,
-    status: invoice.status,
-    dueDate: invoice.dueDate instanceof Date ? invoice.dueDate.toISOString() : invoice.dueDate,
-  };
-}
-
-function snapshotToInvoice(snapshot: Record<string, unknown>, base: Invoice): Invoice {
-  return {
-    ...base,
-    customerId: (snapshot.customerId as string) ?? base.customerId,
-    lineItems: snapshot.lineItems
-      ? (snapshot.lineItems as Array<{
-          description: string; quantity: number; unitPrice: number | string;
-          amount: number | string; internalItemCode?: string; internalAccountCode?: string;
-        }>).map(li => ({
-          description: li.description,
-          quantity: li.quantity,
-          unitPrice: Number(li.unitPrice).toFixed(2),
-          amount: Number(li.amount).toFixed(2),
-          ...(li.internalItemCode ? { internalItemCode: li.internalItemCode } : {}),
-          ...(li.internalAccountCode ? { internalAccountCode: li.internalAccountCode } : {}),
-        }))
-      : base.lineItems,
-    totalAmount: snapshot.totalAmount != null
-      ? Number(snapshot.totalAmount).toFixed(2)
-      : base.totalAmount,
-    currency: (snapshot.currency as string) ?? base.currency,
-    status: (snapshot.status as InvoiceStatus) ?? base.status,
-    dueDate: snapshot.dueDate ? new Date(snapshot.dueDate as string) : base.dueDate,
-  };
-}
 
 export async function pullInvoice(
   qboId: string,

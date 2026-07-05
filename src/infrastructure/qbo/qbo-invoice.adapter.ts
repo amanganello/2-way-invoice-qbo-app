@@ -1,12 +1,50 @@
 import type {
   Invoice, QBOInvoicePort, QBOSyncContext, QBOInvoiceResult, InvoiceStatus,
 } from "@/domain/invoices/invoice.types.js";
+import { CurrencyCodeSchema, MoneySchema } from "@/domain/invoices/invoice.types.js";
 import { NotFoundError } from "@/shared/errors/app-error.js";
 import { qboClient } from "./qbo.client.js";
 import type { QBOInvoiceEntity, QBOLine } from "./qbo.types.js";
+import { z } from "zod";
 
 type InvoiceResponse = { Invoice: QBOInvoiceEntity };
 type QueryResponse = { QueryResponse: { Invoice?: QBOInvoiceEntity[]; maxResults?: number } };
+
+const QBORefSchema = z.object({ value: z.string(), name: z.string().optional() });
+const QBOLineSchema = z.object({
+  Id: z.string().optional(),
+  LineNum: z.number().optional(),
+  Amount: z.number(),
+  DetailType: z.union([z.literal("SalesItemLineDetail"), z.literal("DescriptionOnly")]),
+  SalesItemLineDetail: z.object({
+    ItemRef: QBORefSchema,
+    AccountRef: z.object({ value: z.string() }).optional(),
+    TaxCodeRef: z.object({ value: z.string() }).optional(),
+    Qty: z.number().optional(),
+    UnitPrice: z.number().optional(),
+  }).optional(),
+  Description: z.string().optional(),
+});
+const QBOInvoiceEntitySchema = z.object({
+  Id: z.string().optional(),
+  SyncToken: z.string().optional(),
+  DocNumber: z.string().optional(),
+  CustomerRef: QBORefSchema,
+  Line: z.array(QBOLineSchema).optional(),
+  TotalAmt: z.number().optional(),
+  Balance: z.number().optional(),
+  DueDate: z.string().optional(),
+  CurrencyRef: z.object({ value: z.string() }).optional(),
+  PrivateNote: z.string().optional(),
+  MetaData: z.object({ CreateTime: z.string(), LastUpdatedTime: z.string() }).optional(),
+}) satisfies z.ZodType<QBOInvoiceEntity>;
+const InvoiceResponseSchema = z.object({ Invoice: QBOInvoiceEntitySchema });
+const QueryResponseSchema = z.object({
+  QueryResponse: z.object({
+    Invoice: z.array(QBOInvoiceEntitySchema).optional(),
+    maxResults: z.number().optional(),
+  }),
+});
 
 function buildLines(
   lineItems: Invoice["lineItems"],
@@ -63,11 +101,11 @@ function toResult(entity: QBOInvoiceEntity, fallbackInvoice?: Partial<Invoice>):
       .map(l => ({
         description: l.Description ?? "",
         quantity: l.SalesItemLineDetail?.Qty ?? 1,
-        unitPrice: Number(l.SalesItemLineDetail?.UnitPrice ?? l.Amount).toFixed(2),
-        amount: Number(l.Amount).toFixed(2),
+        unitPrice: MoneySchema.parse(Number(l.SalesItemLineDetail?.UnitPrice ?? l.Amount).toFixed(2)),
+        amount: MoneySchema.parse(Number(l.Amount).toFixed(2)),
       })),
-    totalAmount: Number(entity.TotalAmt ?? 0).toFixed(2),
-    currency: entity.CurrencyRef?.value ?? "USD",
+    totalAmount: MoneySchema.parse(Number(entity.TotalAmt ?? 0).toFixed(2)),
+    currency: CurrencyCodeSchema.parse(entity.CurrencyRef?.value ?? "USD"),
     // QBO has no explicit status enum. Derive internal status from available fields:
     // - No line items AND TotalAmt === 0 → invoice was voided via the void API
     // - DocNumber absent or empty → invoice is still a draft in QBO
@@ -94,7 +132,9 @@ export class QBOInvoiceAdapter implements QBOInvoicePort {
   async getInvoice(qboId: string): Promise<QBOInvoiceResult> {
     const res = await qboClient.request<InvoiceResponse>(
       "GET",
-      `/invoice/${qboId}?minorversion=65`
+      `/invoice/${qboId}?minorversion=65`,
+      undefined,
+      json => InvoiceResponseSchema.parse(json)
     );
     return toResult(res.Invoice);
   }
@@ -110,7 +150,12 @@ export class QBOInvoiceAdapter implements QBOInvoicePort {
       DueDate: invoice.dueDate.toISOString().split("T")[0],
       CurrencyRef: { value: invoice.currency },
     };
-    const res = await qboClient.request<InvoiceResponse>("POST", "/invoice?minorversion=65", payload);
+    const res = await qboClient.request<InvoiceResponse>(
+      "POST",
+      "/invoice?minorversion=65",
+      payload,
+      json => InvoiceResponseSchema.parse(json)
+    );
     return toResult(res.Invoice);
   }
 
@@ -131,7 +176,8 @@ export class QBOInvoiceAdapter implements QBOInvoicePort {
     const res = await qboClient.request<InvoiceResponse>(
       "POST",
       "/invoice?operation=update&minorversion=65",
-      payload
+      payload,
+      json => InvoiceResponseSchema.parse(json)
     );
     return toResult(res.Invoice);
   }
@@ -141,7 +187,8 @@ export class QBOInvoiceAdapter implements QBOInvoicePort {
     const res = await qboClient.request<InvoiceResponse>(
       "POST",
       "/invoice?operation=void&minorversion=65",
-      payload
+      payload,
+      json => InvoiceResponseSchema.parse(json)
     );
     return toResult(res.Invoice);
   }
@@ -149,7 +196,9 @@ export class QBOInvoiceAdapter implements QBOInvoicePort {
   async findByDocNumber(docNumber: string): Promise<QBOInvoiceResult | null> {
     const res = await qboClient.request<QueryResponse>(
       "GET",
-      `/query?query=${encodeURIComponent(`SELECT * FROM Invoice WHERE DocNumber = '${docNumber}'`)}&minorversion=65`
+      `/query?query=${encodeURIComponent(`SELECT * FROM Invoice WHERE DocNumber = '${docNumber}'`)}&minorversion=65`,
+      undefined,
+      json => QueryResponseSchema.parse(json)
     );
     const invoices = res.QueryResponse.Invoice;
     if (!invoices?.length) return null;

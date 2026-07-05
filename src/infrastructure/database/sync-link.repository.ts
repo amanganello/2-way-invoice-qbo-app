@@ -1,21 +1,7 @@
 import { prisma } from "./prisma.js";
 import type { SyncStatus } from "@prisma/client";
 import { ConflictError } from "@/shared/errors/app-error.js";
-
-export type SyncLinkRecord = {
-  id: string;
-  internalId: string;
-  qboId: string | null;
-  qboSyncToken: string | null;
-  qboUpdatedAt: Date | null;
-  internalUpdatedAt: Date;
-  syncStatus: "SYNCED" | "PENDING" | "PROCESSING" | "CONFLICT" | "ERROR";
-  lastSyncedAt: Date | null;
-  lastSyncedSnapshot: Record<string, unknown> | null;
-  version: number;
-  createdAt: Date;
-  updatedAt: Date;
-};
+import type { AuditLogRecord, SyncLinkPort, SyncLinkRecord } from "@/application/ports/sync.ports.js";
 
 function toDomain(row: {
   id: string; internalId: string; qboId: string | null; qboSyncToken: string | null;
@@ -25,20 +11,48 @@ function toDomain(row: {
 }): SyncLinkRecord {
   return {
     ...row,
-    syncStatus: row.syncStatus as SyncLinkRecord["syncStatus"],
+    syncStatus: row.syncStatus,
     lastSyncedSnapshot: row.lastSyncedSnapshot as Record<string, unknown> | null,
   };
 }
 
-export const syncLinkRepository = {
+export const syncLinkRepository: SyncLinkPort = {
   async findByInternalId(internalId: string): Promise<SyncLinkRecord | null> {
     const row = await prisma.syncLink.findUnique({ where: { internalId } });
+    return row ? toDomain(row) : null;
+  },
+
+  async findById(id: string): Promise<SyncLinkRecord | null> {
+    const row = await prisma.syncLink.findUnique({ where: { id } });
     return row ? toDomain(row) : null;
   },
 
   async findByQboId(qboId: string): Promise<SyncLinkRecord | null> {
     const row = await prisma.syncLink.findFirst({ where: { qboId } });
     return row ? toDomain(row) : null;
+  },
+
+  async list(params: { syncStatus?: SyncLinkRecord["syncStatus"]; limit: number; cursor?: string }): Promise<SyncLinkRecord[]> {
+    const rows = await prisma.syncLink.findMany({
+      where: params.syncStatus ? { syncStatus: params.syncStatus } : undefined,
+      orderBy: { createdAt: "desc" },
+      take: params.limit,
+      ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
+    });
+    return rows.map(toDomain);
+  },
+
+  async listConflicts(limit: number): Promise<Array<SyncLinkRecord & { auditLogs?: AuditLogRecord[] }>> {
+    const rows = await prisma.syncLink.findMany({
+      where: { syncStatus: "CONFLICT" },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      include: { auditLogs: { orderBy: { createdAt: "desc" }, take: 1 } },
+    });
+    return rows.map(row => ({
+      ...toDomain(row),
+      auditLogs: row.auditLogs as AuditLogRecord[],
+    }));
   },
 
   async create(data: {
@@ -50,7 +64,7 @@ export const syncLinkRepository = {
       data: {
         internalId: data.internalId,
         internalUpdatedAt: data.internalUpdatedAt,
-        syncStatus: (data.syncStatus ?? "PENDING") as SyncStatus,
+        syncStatus: data.syncStatus ?? "PENDING",
       },
     });
     return toDomain(row);
@@ -79,7 +93,7 @@ export const syncLinkRepository = {
     const result = await prisma.syncLink.updateMany({
       where: { id, version },
       data: {
-        syncStatus: status as SyncStatus,
+        syncStatus: status,
         version: { increment: 1 },
         ...updates,
         lastSyncedSnapshot: updates.lastSyncedSnapshot
@@ -134,7 +148,7 @@ export const syncLinkRepository = {
 
   async findByStatuses(statuses: SyncLinkRecord["syncStatus"][]): Promise<SyncLinkRecord[]> {
     const rows = await prisma.syncLink.findMany({
-      where: { syncStatus: { in: statuses as SyncStatus[] } },
+      where: { syncStatus: { in: statuses } },
     });
     return rows.map(toDomain);
   },
@@ -157,12 +171,14 @@ export const syncLinkRepository = {
     return rows.map(toDomain);
   },
 
-  async findInvoicesWithoutSyncLink(): Promise<{ internalId: string }[]> {
+  async findInvoicesWithoutSyncLink(limit = 500): Promise<Array<{ internalId: string; internalUpdatedAt: Date }>> {
     const invoices = await prisma.invoice.findMany({
       where: { syncLink: { is: null } },
-      select: { id: true },
+      select: { id: true, updatedAt: true },
+      orderBy: { createdAt: "asc" },
+      take: limit,
     });
-    return invoices.map(inv => ({ internalId: inv.id }));
+    return invoices.map(inv => ({ internalId: inv.id, internalUpdatedAt: inv.updatedAt }));
   },
 };
 

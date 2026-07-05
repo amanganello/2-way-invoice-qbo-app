@@ -1,8 +1,8 @@
-import type { SyncLinkRepository } from "@/infrastructure/database/sync-link.repository.js";
+import type { SyncLinkPort } from "@/application/ports/sync.ports.js";
 import logger from "@/infrastructure/logger/index.js";
 
 export type ReconciliationDeps = {
-  syncLinkRepo: Pick<SyncLinkRepository, "findStuckProcessing" | "findByStatuses" | "findUnsynced" | "findInvoicesWithoutSyncLink" | "setStatus">;
+  syncLinkRepo: Pick<SyncLinkPort, "findStuckProcessing" | "findByStatuses" | "findUnsynced" | "findInvoicesWithoutSyncLink" | "setStatus">;
   enqueueReconcile: (internalId: string) => Promise<void>;
   enqueueFailedPaymentRetries?: () => Promise<void>;
 };

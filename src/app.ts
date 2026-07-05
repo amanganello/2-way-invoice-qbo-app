@@ -3,15 +3,64 @@ import sensible from "@fastify/sensible";
 import { ZodError } from "zod";
 import logger from "@/infrastructure/logger/index.js";
 import { AppError } from "@/shared/errors/app-error.js";
+import { env } from "@/config/env.js";
 
 let isHealthy = true;
 export function getHealthStatus() { return isHealthy; }
 
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_REQUESTS = 120;
+const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+
 export function buildApp() {
   // Cast needed: pino.Logger's child() return type is narrower than FastifyBaseLogger expects
-  const app = fastify({ logger: logger as unknown as FastifyBaseLogger });
+  const app = fastify({
+    logger: logger as unknown as FastifyBaseLogger,
+    bodyLimit: 1_048_576,
+  });
 
   app.register(sensible);
+
+  app.addHook("onRequest", (request, reply, done) => {
+    const allowedOrigin = env.FRONTEND_URL === "/" ? undefined : env.FRONTEND_URL;
+    const origin = request.headers.origin;
+    if (allowedOrigin && origin === allowedOrigin) {
+      reply.header("Access-Control-Allow-Origin", allowedOrigin);
+      reply.header("Vary", "Origin");
+    }
+    reply.header("Access-Control-Allow-Headers", "Authorization, Content-Type");
+    reply.header("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS");
+    reply.header("X-Content-Type-Options", "nosniff");
+
+    if (request.method === "OPTIONS") {
+      reply.status(204).send();
+      return;
+    }
+
+    done();
+  });
+
+  app.addHook("onRequest", (request, reply, done) => {
+    if (request.url.startsWith("/health") || request.url.startsWith("/webhooks/qbo")) {
+      done();
+      return;
+    }
+
+    const key = request.ip;
+    const now = Date.now();
+    const bucket = rateLimitBuckets.get(key);
+    if (!bucket || bucket.resetAt <= now) {
+      rateLimitBuckets.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+      done();
+      return;
+    }
+    bucket.count++;
+    if (bucket.count > RATE_LIMIT_MAX_REQUESTS) {
+      reply.status(429).send({ error: "RateLimitExceeded", statusCode: 429, message: "Too many requests" });
+      return;
+    }
+    done();
+  });
 
   // Store raw string body for HMAC verification in webhook handler.
   // The wildcard parser handles requests with no content-type header (e.g. webhook signature tests).

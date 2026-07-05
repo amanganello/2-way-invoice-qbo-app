@@ -1,3 +1,12 @@
+import type {
+  ApiLineItem,
+  CreateInvoiceBody,
+  InvoiceResponse as Invoice,
+  MappingResponse,
+  SyncLinkDetailResponse as SyncLinkDetail,
+  SyncLinkResponse as SyncLink,
+} from '../../../src/shared/api-contracts.ts'
+
 const BASE = ''
 
 export interface LineItem {
@@ -7,75 +16,10 @@ export interface LineItem {
   amount: number
 }
 
-export interface ApiLineItem {
-  description: string
-  quantity: number
-  unitPrice: string
-  amount: string
-}
-
-export interface CreateInvoiceBody {
-  customerId: string
-  lineItems: LineItem[]
-  totalAmount: number
-  currency: string
-  status: string
-  dueDate: string
-}
-
-export interface Invoice {
-  id: string
-  customerId: string
-  lineItems: ApiLineItem[]
-  totalAmount: string
-  currency: string
-  status: string
-  dueDate: string
-  createdAt: string
-  updatedAt: string
-}
-
-export interface SyncLink {
-  id: string
-  internalId: string
-  qboId: string | null
-  syncStatus: string
-  qboSyncToken: string | null
-  lastSyncedAt: string | null
-}
-
-export interface AuditLog {
-  id: string
-  action: string
-  result: string
-  errorMessage: string | null
-  createdAt: string
-  beforeState: unknown
-  afterState: unknown
-}
-
-export interface SyncLinkDetail extends SyncLink {
-  auditLogs: AuditLog[]
-}
-
-export interface AccountMap {
-  internalAccountCode: string
-  qboAccountId: string
-  qboAccountName: string
-}
-
-export interface ItemMap {
-  internalItemCode: string
-  qboItemId: string
-  qboItemName: string
-  defaultTaxCode: string
-}
-
-export interface CustomerMap {
-  internalCustomerId: string
-  qboCustomerId: string
-  qboCustomerName: string
-}
+export type { ApiLineItem, CreateInvoiceBody, Invoice, SyncLink, SyncLinkDetail }
+export type AccountMap = MappingResponse['accounts'][number]
+export type ItemMap = MappingResponse['items'][number]
+export type CustomerMap = MappingResponse['customers'][number]
 
 function getHeaders(apiKey?: string): HeadersInit {
   const key = apiKey ?? localStorage.getItem('apiKey') ?? ''
@@ -137,7 +81,7 @@ export function importMappings(apiKey?: string) {
 }
 
 export function getMappings(apiKey?: string) {
-  return req<{ accounts: AccountMap[]; items: ItemMap[]; customers: CustomerMap[] }>('GET', '/sync/mappings', undefined, apiKey)
+  return req<MappingResponse>('GET', '/sync/mappings', undefined, apiKey)
 }
 
 export function triggerInitialLoad(apiKey?: string) {
