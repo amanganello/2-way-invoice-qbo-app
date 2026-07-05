@@ -13,7 +13,7 @@ export class QBOPaymentAdapter implements QBOPaymentPort {
   ): Promise<QBOPaymentResult> {
     const payload: QBOPaymentEntity = {
       CustomerRef: { value: customerRef },
-      TotalAmt: payment.amount,
+      TotalAmt: parseFloat(payment.amount),
       PaymentRefNum: payment.id,
       TxnDate: payment.paidAt.toISOString().split("T")[0],
       LinkedTxn: [{ TxnId: qboInvoiceId, TxnType: "Invoice" }],

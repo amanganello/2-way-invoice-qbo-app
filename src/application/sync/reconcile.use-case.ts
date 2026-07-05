@@ -169,7 +169,7 @@ export async function reconcileInvoice(internalId: string, deps: ReconcileDeps):
         const snap = syncLink.lastSyncedSnapshot as Record<string, unknown>;
         const lineItemsChanged =
           JSON.stringify(invoice.lineItems) !== JSON.stringify(snap.lineItems);
-        const totalAmountChanged = invoice.totalAmount !== (snap.totalAmount as number);
+        const totalAmountChanged = Number(invoice.totalAmount) !== Number(snap.totalAmount);
 
         if (lineItemsChanged || totalAmountChanged) {
           throw new ConflictError(

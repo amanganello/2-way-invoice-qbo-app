@@ -3,14 +3,14 @@ import { z } from "zod";
 const LineItemSchema = z.object({
   description: z.string().min(1),
   quantity: z.number().positive(),
-  unitPrice: z.number().positive(),
-  amount: z.number().positive(),
+  unitPrice: z.number().positive().transform(n => n.toFixed(2)),
+  amount: z.number().positive().transform(n => n.toFixed(2)),
 });
 
 export const CreateInvoiceSchema = z.object({
   customerId: z.string().min(1),
   lineItems: z.array(LineItemSchema).min(1),
-  totalAmount: z.number().positive(),
+  totalAmount: z.number().positive().transform(n => n.toFixed(2)),
   currency: z.string().length(3).default("USD"),
   status: z.enum(["draft", "sent", "paid", "void"]).default("draft"),
   dueDate: z.coerce.date(),

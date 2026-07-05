@@ -22,8 +22,18 @@ function toDomain(row: PrismaInvoice): Invoice {
   return {
     id: row.id,
     customerId: row.customerId,
-    lineItems: row.lineItems as InvoiceLineItem[],
-    totalAmount: row.totalAmount.toNumber(),
+    lineItems: (row.lineItems as Array<{
+      description: string; quantity: number; unitPrice: number | string;
+      amount: number | string; internalItemCode?: string; internalAccountCode?: string;
+    }>).map(li => ({
+      description: li.description,
+      quantity: li.quantity,
+      unitPrice: Number(li.unitPrice).toFixed(2),
+      amount: Number(li.amount).toFixed(2),
+      ...(li.internalItemCode ? { internalItemCode: li.internalItemCode } : {}),
+      ...(li.internalAccountCode ? { internalAccountCode: li.internalAccountCode } : {}),
+    })),
+    totalAmount: row.totalAmount.toFixed(2),
     currency: row.currency,
     status: STATUS_TO_DOMAIN[row.status],
     dueDate: row.dueDate,

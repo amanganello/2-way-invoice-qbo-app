@@ -35,7 +35,7 @@ function buildLines(
     }
 
     return {
-      Amount: li.amount,
+      Amount: parseFloat(li.amount),
       DetailType: "SalesItemLineDetail",
       Description: li.description,
       SalesItemLineDetail: {
@@ -43,7 +43,7 @@ function buildLines(
         ...(accountMapping && { AccountRef: { value: accountMapping.qboAccountId } }),
         TaxCodeRef: { value: mapping?.taxCode ?? "NON" },
         Qty: li.quantity,
-        UnitPrice: li.unitPrice,
+        UnitPrice: parseFloat(li.unitPrice),
       },
     };
   });
@@ -58,10 +58,10 @@ function toResult(entity: QBOInvoiceEntity, fallbackInvoice?: Partial<Invoice>):
       .map(l => ({
         description: l.Description ?? "",
         quantity: l.SalesItemLineDetail?.Qty ?? 1,
-        unitPrice: l.SalesItemLineDetail?.UnitPrice ?? l.Amount,
-        amount: l.Amount,
+        unitPrice: Number(l.SalesItemLineDetail?.UnitPrice ?? l.Amount).toFixed(2),
+        amount: Number(l.Amount).toFixed(2),
       })),
-    totalAmount: entity.TotalAmt ?? 0,
+    totalAmount: Number(entity.TotalAmt ?? 0).toFixed(2),
     currency: entity.CurrencyRef?.value ?? "USD",
     // QBO has no explicit status enum. Derive internal status from available fields:
     // - No line items AND TotalAmt === 0 → invoice was voided via the void API

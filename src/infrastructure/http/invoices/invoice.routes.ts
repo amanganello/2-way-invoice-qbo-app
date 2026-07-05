@@ -8,7 +8,7 @@ import { CreateInvoiceSchema, UpdateInvoiceSchema, InvoiceParamsSchema } from ".
 import { z } from "zod";
 
 const CreatePaymentSchema = z.object({
-  amount: z.number().positive(),
+  amount: z.number().positive().transform(n => n.toFixed(2)),
   currency: z.string().length(3).default("USD"),
   paidAt: z.coerce.date(),
 });

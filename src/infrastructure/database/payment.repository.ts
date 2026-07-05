@@ -6,7 +6,7 @@ function toDomain(row: { id: string; invoiceId: string; amount: Prisma.Decimal; 
   return {
     id: row.id,
     invoiceId: row.invoiceId,
-    amount: row.amount.toNumber(),
+    amount: row.amount.toFixed(2),
     currency: row.currency,
     paidAt: row.paidAt,
   };

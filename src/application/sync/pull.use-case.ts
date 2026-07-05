@@ -31,8 +31,22 @@ function snapshotToInvoice(snapshot: Record<string, unknown>, base: Invoice): In
   return {
     ...base,
     customerId: (snapshot.customerId as string) ?? base.customerId,
-    lineItems: (snapshot.lineItems as Invoice["lineItems"]) ?? base.lineItems,
-    totalAmount: (snapshot.totalAmount as number) ?? base.totalAmount,
+    lineItems: snapshot.lineItems
+      ? (snapshot.lineItems as Array<{
+          description: string; quantity: number; unitPrice: number | string;
+          amount: number | string; internalItemCode?: string; internalAccountCode?: string;
+        }>).map(li => ({
+          description: li.description,
+          quantity: li.quantity,
+          unitPrice: Number(li.unitPrice).toFixed(2),
+          amount: Number(li.amount).toFixed(2),
+          ...(li.internalItemCode ? { internalItemCode: li.internalItemCode } : {}),
+          ...(li.internalAccountCode ? { internalAccountCode: li.internalAccountCode } : {}),
+        }))
+      : base.lineItems,
+    totalAmount: snapshot.totalAmount != null
+      ? Number(snapshot.totalAmount).toFixed(2)
+      : base.totalAmount,
     currency: (snapshot.currency as string) ?? base.currency,
     status: (snapshot.status as InvoiceStatus) ?? base.status,
     dueDate: snapshot.dueDate ? new Date(snapshot.dueDate as string) : base.dueDate,
