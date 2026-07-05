@@ -2,9 +2,9 @@ export type InvoiceStatus = "draft" | "sent" | "paid" | "void" | "overdue";
 
 export type InvoiceLineItem = {
   description: string;
-  quantity: number;      // stays number — it's a count
-  unitPrice: string;     // was number
-  amount: string;        // was number
+  quantity: number;
+  unitPrice: string;
+  amount: string;
   internalItemCode?: string;
   internalAccountCode?: string;
 };
@@ -13,7 +13,7 @@ export type Invoice = {
   id: string;
   customerId: string;
   lineItems: InvoiceLineItem[];
-  totalAmount: string;   // was number
+  totalAmount: string;
   currency: string;
   status: InvoiceStatus;
   dueDate: Date;
@@ -24,7 +24,7 @@ export type Invoice = {
 export type Payment = {
   id: string;
   invoiceId: string;
-  amount: string;        // was number
+  amount: string;
   currency: string;
   paidAt: Date;
 };
