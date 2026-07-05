@@ -39,6 +39,12 @@ export class QBOClient {
       body: body != null ? JSON.stringify(body) : undefined,
     });
 
+    if (response.status === 429) {
+      const retryAfter = response.headers.get("Retry-After") ?? "60";
+      logger.warn({ retryAfter }, "QBO rate limit hit (429) — backing off");
+      throw new ExternalServiceError(`QBO rate limited; retry after ${retryAfter}s`);
+    }
+
     const json = await response.json() as T | QBOFault;
 
     if ("Fault" in (json as object)) {
@@ -117,7 +123,8 @@ export class QBOClient {
       const msg = err instanceof Error ? err.message : String(err);
       // Never retry auth rejections — Intuit refresh tokens are one-time-use.
       // Retrying with a consumed token just burns the next token too.
-      const isAuthError = msg.toLowerCase().includes("invalid") || msg.toLowerCase().includes("unauthorized") || msg.toLowerCase().includes("authorize");
+      // "invalid_grant" is OAuth2's canonical error for an expired/consumed refresh token.
+      const isAuthError = msg.includes("invalid_grant") || msg.toLowerCase().includes("unauthorized") || msg.toLowerCase().includes("401");
       if (!isAuthError && attempt < 3) {
         await new Promise(r => setTimeout(r, 5000));
         return this.refreshWithRetry(refreshToken, attempt + 1);
