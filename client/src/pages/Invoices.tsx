@@ -80,7 +80,7 @@ export function Invoices() {
       if (modal?.mode === 'create') {
         await createInvoice({ ...form, totalAmount: total })
       } else if (modal?.invoice) {
-        await updateInvoice(modal.invoice.id, form)
+        await updateInvoice(modal.invoice.id, { ...form, totalAmount: total })
       }
       refreshInvoices()
       setModal(null)
