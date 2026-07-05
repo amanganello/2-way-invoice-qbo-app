@@ -7,6 +7,13 @@ export interface LineItem {
   amount: number
 }
 
+export interface ApiLineItem {
+  description: string
+  quantity: number
+  unitPrice: string
+  amount: string
+}
+
 export interface CreateInvoiceBody {
   customerId: string
   lineItems: LineItem[]
@@ -19,8 +26,8 @@ export interface CreateInvoiceBody {
 export interface Invoice {
   id: string
   customerId: string
-  lineItems: LineItem[]
-  totalAmount: number
+  lineItems: ApiLineItem[]
+  totalAmount: string
   currency: string
   status: string
   dueDate: string

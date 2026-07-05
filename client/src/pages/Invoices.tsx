@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getInvoices, createInvoice, updateInvoice, getSyncLinks, getMappings } from '../lib/api'
-import type { Invoice, LineItem, CreateInvoiceBody, SyncLink, CustomerMap } from '../lib/api'
+import type { Invoice, LineItem, CreateInvoiceBody, SyncLink, CustomerMap, ApiLineItem } from '../lib/api'
 import { usePolling } from '../lib/usePolling'
 import { StatusBadge } from '../components/StatusBadge'
 import { Spinner } from '../components/Spinner'
@@ -42,8 +42,13 @@ export function Invoices() {
   function openUpdate(inv: Invoice) {
     setForm({
       customerId: inv.customerId,
-      lineItems: inv.lineItems,
-      totalAmount: inv.totalAmount,
+      lineItems: inv.lineItems.map((l: ApiLineItem) => ({
+        description: l.description,
+        quantity: l.quantity,
+        unitPrice: Number(l.unitPrice),
+        amount: Number(l.amount),
+      })),
+      totalAmount: Number(inv.totalAmount),
       currency: inv.currency,
       status: inv.status,
       dueDate: inv.dueDate.slice(0, 10),
@@ -137,7 +142,7 @@ export function Invoices() {
                     <td className="px-4 py-2 font-mono text-xs">{inv.id.slice(0, 8)}…</td>
                     <td className="px-4 py-2">{inv.customerId}</td>
                     <td className="px-4 py-2">{inv.status}</td>
-                    <td className="px-4 py-2">{inv.currency} {inv.totalAmount.toFixed(2)}</td>
+                    <td className="px-4 py-2">{inv.currency} {Number(inv.totalAmount).toFixed(2)}</td>
                     <td className="px-4 py-2">{inv.dueDate.slice(0, 10)}</td>
                     <td className="px-4 py-2">{sl ? <StatusBadge status={sl.syncStatus} /> : <span className="text-gray-400 text-xs">—</span>}</td>
                     <td className="px-4 py-2">
