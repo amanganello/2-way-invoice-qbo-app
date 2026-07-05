@@ -20,6 +20,7 @@ export default defineConfig({
       QB_WEBHOOK_VERIFIER_TOKEN: "test-webhook-token",
       TOKEN_ENCRYPTION_KEY: "a".repeat(64),
       API_KEY: "test-api-key",
+      FRONTEND_URL: "http://localhost:5173",
       REDIS_URL: "redis://localhost:6379",
       RECONCILIATION_INTERVAL_MINUTES: "15",
       SYNC_JOB_MAX_RETRIES: "3",

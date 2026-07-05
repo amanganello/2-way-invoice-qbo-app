@@ -54,4 +54,17 @@ describe("Auth routes", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json<{ refreshTokenExpiringSoon: boolean }>().refreshTokenExpiringSoon).toBe(true);
   });
+
+  it("GET /auth/qbo/status returns 401 with missing API key and no query param", async () => {
+    const res = await app.inject({ method: "GET", url: "/auth/qbo/status" });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("GET /auth/qbo/status accepts API key via ?apiKey= query param", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/auth/qbo/status?apiKey=test-api-key",
+    });
+    expect(res.statusCode).toBe(200);
+  });
 });

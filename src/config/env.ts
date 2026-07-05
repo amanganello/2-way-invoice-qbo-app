@@ -16,6 +16,7 @@ const envSchema = z.object({
 
   TOKEN_ENCRYPTION_KEY: z.string().length(64, "TOKEN_ENCRYPTION_KEY must be 32-byte hex (64 chars)").regex(/^[0-9a-f]{64}$/i, "TOKEN_ENCRYPTION_KEY must be 32-byte hex (64 hex chars)"),
   API_KEY: z.string().min(1, "API_KEY is required"),
+  FRONTEND_URL: z.string().default("/"),
 
   REDIS_URL: z.string().default("redis://localhost:6379"),
   REDIS_PASSWORD: z.string().optional(),
