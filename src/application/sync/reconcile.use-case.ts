@@ -168,12 +168,14 @@ export async function reconcileInvoice(internalId: string, deps: ReconcileDeps):
       if (payments.length > 0 && syncLink.lastSyncedSnapshot) {
         const snap = syncLink.lastSyncedSnapshot as Record<string, unknown>;
         const normalizeLineItems = (items: unknown) =>
-          (items as Array<{ description: string; quantity: number; unitPrice: number | string; amount: number | string; [key: string]: unknown }>)
-            .map(li => ({
-              ...li,
-              unitPrice: Number(li.unitPrice).toFixed(2),
-              amount: Number(li.amount).toFixed(2),
-            }));
+          Array.isArray(items)
+            ? (items as Array<{ description: string; quantity: number; unitPrice: number | string; amount: number | string; [key: string]: unknown }>)
+                .map(li => ({
+                  ...li,
+                  unitPrice: Number(li.unitPrice).toFixed(2),
+                  amount: Number(li.amount).toFixed(2),
+                }))
+            : items;
         const lineItemsChanged =
           JSON.stringify(invoice.lineItems) !== JSON.stringify(normalizeLineItems(snap.lineItems));
         const totalAmountChanged = Number(invoice.totalAmount) !== Number(snap.totalAmount);
