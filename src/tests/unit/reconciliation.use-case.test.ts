@@ -18,6 +18,7 @@ function makeDeps() {
       setStatus: vi.fn(async () => makeLink()),
       findByStatuses: vi.fn(async () => [makeLink(), makeLink({ id: "sl-2", internalId: "inv-2" })]),
       findUnsynced: vi.fn(async () => []),
+      findInvoicesWithoutSyncLink: vi.fn(async () => []),
     },
     enqueueReconcile: vi.fn(async () => {}),
   };

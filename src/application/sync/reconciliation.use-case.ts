@@ -2,7 +2,7 @@ import type { SyncLinkRepository } from "@/infrastructure/database/sync-link.rep
 import logger from "@/infrastructure/logger/index.js";
 
 export type ReconciliationDeps = {
-  syncLinkRepo: SyncLinkRepository;
+  syncLinkRepo: Pick<SyncLinkRepository, "findStuckProcessing" | "findByStatuses" | "findUnsynced" | "findInvoicesWithoutSyncLink" | "setStatus">;
   enqueueReconcile: (internalId: string) => Promise<void>;
 };
 
@@ -21,11 +21,13 @@ export async function runReconciliation(deps: ReconciliationDeps): Promise<void>
 
   // Scan PENDING | ERROR (excluding PROCESSING and CONFLICT)
   const toRetry = await syncLinkRepo.findByStatuses(["PENDING", "ERROR"]);
-  // Also include records that have never synced
+  // SyncLinks that exist but have never synced
   const unsynced = await syncLinkRepo.findUnsynced();
+  // Invoices with no SyncLink at all (job lost before worker could create one)
+  const orphaned = await syncLinkRepo.findInvoicesWithoutSyncLink();
 
   const seen = new Set<string>();
-  const all = [...toRetry, ...unsynced];
+  const all = [...toRetry, ...unsynced, ...orphaned];
 
   for (const link of all) {
     if (seen.has(link.internalId)) continue;
