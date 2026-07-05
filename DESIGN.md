@@ -54,8 +54,9 @@ Invoice Id. It carries:
 `PaymentSyncLink` maps internal `Payment.id` to QBO Payment Id. Payments
 are immutable in QBO (no update API), so the sync is append-only. No
 snapshot needed — payments never conflict. Stores `invoiceInternalId` as
-an indexed foreign key so the partially-paid guard can look up payments
-by invoice without a cross-table scan.
+an indexed invoice reference so the partially-paid guard can look up
+payments by invoice without a cross-table scan. The current schema keeps
+this as an indexed string, not a Prisma foreign key.
 
 ### GL account and item mapping
 
@@ -109,9 +110,14 @@ The webhook handler is intentionally thin:
 
 1. Verify HMAC-SHA256 signature (`intuit-signature` header) → 401 if invalid
 2. Check Redis availability → 503 if down (never 200 when the job wasn't enqueued)
-3. Insert `EventLog` with `skipDuplicates: true` — unique constraint on `eventId`
-   is the deduplication guard. If 0 rows inserted → return 200 immediately.
-4. Enqueue `pull-${qboId}` job → return 200
+3. Enqueue a pull job with job id `pull-${eventId}`. `eventId` includes
+   entity type, entity id, and QBO `lastUpdated`, so distinct updates for
+   the same invoice are not collapsed.
+4. Insert `EventLog` with `skipDuplicates: true` — unique constraint on
+   `eventId` is the durable deduplication guard. If 0 rows are inserted,
+   the event was already recorded; the redundant enqueue is safe because
+   the BullMQ job id is deterministic.
+5. Return 200
 
 The worker refetches the full entity from QBO (webhooks carry only the
 entity id, not the payload), checks for staleness, runs conflict
@@ -134,9 +140,10 @@ Three independent layers:
 1. **BullMQ jobId deduplication** — concurrent internal changes to the
    same invoice collapse into one `reconcile-${internalId}` job.
 2. **EventLog unique constraint on `eventId`** — duplicate webhook
-   deliveries are dropped before the job is enqueued. Pre-check reads
-   are insufficient under concurrent delivery; the DB constraint is
-   the real guard.
+   deliveries are recorded once. The route enqueues before writing
+   `EventLog` so a queue failure does not commit a dedup row and cause
+   QBO retries to be ignored. Pre-check reads are insufficient under
+   concurrent delivery; the DB constraint is the real guard.
 3. **Find-or-link on duplicate create** — if `createInvoice` returns a
    duplicate error from QBO, the worker searches QBO by `DocNumber`
    (= `internalId`), links the existing record, and treats as success.
@@ -168,6 +175,7 @@ export const conflictRules = {
   totalAmount: "qbo",   // computed by QBO — cannot be set independently
   dueDate: "manual",    // requires human resolution
   currency: "internal",
+  customerId: "internal",
 }
 ```
 

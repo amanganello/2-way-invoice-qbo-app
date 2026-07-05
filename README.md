@@ -1,6 +1,6 @@
 # Invoice Sync Service
 
-A production-ready backend service that keeps invoices, payments, and
+A production-oriented backend service that keeps invoices, payments, and
 general ledger accounts in sync between an internal invoicing system and
 QuickBooks Online (QBO) — in both directions.
 
@@ -65,7 +65,7 @@ docker compose up -d postgres redis
 ### 4. Run database migrations
 
 ```bash
-pnpm prisma migrate deploy
+pnpm migrate
 ```
 
 ### 5. Authenticate with QuickBooks
@@ -105,9 +105,10 @@ Copy the Verifier Token from the portal into `QB_WEBHOOK_VERIFIER_TOKEN`
 in `.env`. Without this, webhook signature verification will reject all
 incoming events.
 
-### 7. Start the service
+### 7. Start the local demo
 
-The service runs as three separate processes. Open three terminals:
+The local demo runs as two backend processes plus the frontend dev server.
+Open three terminals:
 
 **Terminal 1 — HTTP server:**
 ```bash
@@ -231,8 +232,13 @@ QBO_RATE_LIMIT_MAX=2        # QBO API calls/second — keep at 2 for sandbox (15
 
 ## API Reference
 
-All endpoints except `POST /webhooks/qbo` require:
+All endpoints except `GET /health`, `POST /webhooks/qbo`, and
+`GET /auth/qbo/callback` require:
 `Authorization: Bearer <API_KEY>`
+
+For browser navigation to QBO, `GET /auth/qbo/start` also accepts the API
+key as `?apiKey=...`; other protected routes do not accept query-string
+API keys.
 
 ### Health
 
@@ -241,7 +247,7 @@ All endpoints except `POST /webhooks/qbo` require:
 ### Auth
 
 - `GET /auth/qbo/status` — returns QBO credential validity, expiry,
-  and refresh token warning
+  and refresh token warning. Requires API key.
 - `GET /auth/qbo/start` — initiates the browser OAuth flow; redirects to
   QBO consent page. Requires API key via `?apiKey=` query param.
 - `GET /auth/qbo/callback` — OAuth callback from QBO; exchanges code for
@@ -317,8 +323,8 @@ tradeoff reasoning.
 3. Add Postgres plugin → DATABASE_URL set automatically
 4. Add Redis plugin → REDIS_URL set automatically
 5. Set env vars (QB_CLIENT_ID, QB_CLIENT_SECRET, QB_REALM_ID, QB_WEBHOOK_VERIFIER_TOKEN, QB_REDIRECT_URI, TOKEN_ENCRYPTION_KEY, API_KEY, QB_ENVIRONMENT=sandbox)
-6. Set deploy command: `pnpm migrate`
-7. Add second Railway service (`worker`) from same repo, override start command to `node dist/worker.js`
+6. Configure the deploy/pre-deploy command to run `pnpm migrate`
+7. Use the checked-in `railway.toml` services: `web` starts `node dist/server.js`; `worker` starts `node dist/worker.js`
 8. Set `QB_REDIRECT_URI=https://<web>.railway.app/auth/qbo/callback` and `FRONTEND_URL=https://<web>.railway.app` in Railway env vars, then open the app's Auth tab and click **Reconnect QBO** to complete the OAuth flow in the browser — no terminal access required.
 9. Set QBO webhook endpoint to `https://<web-service>.railway.app/webhooks/qbo`
 

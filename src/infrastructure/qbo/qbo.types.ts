@@ -2,7 +2,7 @@ export type QBOLine = {
   Id?: string;
   LineNum?: number;
   Amount: number;
-  DetailType: "SalesItemLineDetail" | "DescriptionOnly";
+  DetailType: string;
   SalesItemLineDetail?: {
     ItemRef: { value: string; name?: string };
     AccountRef?: { value: string };
@@ -10,6 +10,7 @@ export type QBOLine = {
     Qty?: number;
     UnitPrice?: number;
   };
+  SubTotalLineDetail?: unknown;
   Description?: string;
 };
 

@@ -15,6 +15,29 @@ const EMPTY_BODY: CreateInvoiceBody = {
   dueDate: '',
 }
 
+function isPositiveFiniteNumber(value: number): boolean {
+  return Number.isFinite(value) && value > 0
+}
+
+function isInvoiceFormComplete(body: CreateInvoiceBody): boolean {
+  const total = body.lineItems.reduce((sum, line) => sum + line.amount, 0)
+
+  return (
+    body.customerId.trim().length > 0 &&
+    body.currency.trim().length > 0 &&
+    body.status.trim().length > 0 &&
+    body.dueDate.trim().length > 0 &&
+    body.lineItems.length > 0 &&
+    isPositiveFiniteNumber(total) &&
+    body.lineItems.every(line => (
+      line.description.trim().length > 0 &&
+      isPositiveFiniteNumber(line.quantity) &&
+      isPositiveFiniteNumber(line.unitPrice) &&
+      isPositiveFiniteNumber(line.amount)
+    ))
+  )
+}
+
 export function Invoices() {
   const { data: syncLinks } = usePolling(getSyncLinks, 5000)
   const { data: invoices, loading: invoicesLoading, refresh: refreshInvoices } = usePolling(getInvoices, 10000)
@@ -28,6 +51,7 @@ export function Invoices() {
   const syncLinkByInternalId = new Map<string, SyncLink>(
     (syncLinks ?? []).map(sl => [sl.internalId, sl])
   )
+  const canSubmitInvoice = isInvoiceFormComplete(form)
 
   useEffect(() => {
     getMappings().then(m => setCustomers(m.customers)).catch(() => {})
@@ -78,6 +102,11 @@ export function Invoices() {
   }
 
   async function handleSubmit() {
+    if (!isInvoiceFormComplete(form)) {
+      setError('Complete the required invoice fields before saving.')
+      return
+    }
+
     setSaving(true)
     setError(null)
     try {
@@ -312,8 +341,8 @@ export function Invoices() {
               </button>
               <button
                 onClick={() => void handleSubmit()}
-                disabled={saving}
-                className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                disabled={saving || !canSubmitInvoice}
+                className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {saving && <Spinner />}
                 {modal.mode === 'create' ? 'Create' : 'Save'}

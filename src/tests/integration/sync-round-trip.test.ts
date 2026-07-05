@@ -46,7 +46,26 @@ const server = setupServer(
     return HttpResponse.json({
       Invoice: {
         Id: "QBO-INV-1", SyncToken: "0", DocNumber: "",
-        CustomerRef: { value: "1" }, Line: [],
+        CustomerRef: { value: "1" },
+        Line: [
+          {
+            Id: "1",
+            LineNum: 1,
+            Amount: 100,
+            DetailType: "SalesItemLineDetail",
+            Description: "Demo line",
+            SalesItemLineDetail: {
+              ItemRef: { value: "QBO-ITEM-1" },
+              Qty: 1,
+              UnitPrice: 100,
+            },
+          },
+          {
+            Amount: 100,
+            DetailType: "SubTotalLineDetail",
+            SubTotalLineDetail: {},
+          },
+        ],
         TotalAmt: 100, DueDate: "2030-01-01", CurrencyRef: { value: "USD" },
         MetaData: { CreateTime: "2026-01-01T00:00:00Z", LastUpdatedTime: "2026-01-01T00:00:00Z" },
       },

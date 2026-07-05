@@ -22,7 +22,7 @@ export type AuthRouteDeps = {
   oauthStateStore?: OAuthStateStorePort;
 };
 
-export async function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps = {}): Promise<void> {
+export async function registerProtectedAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps = {}): Promise<void> {
   const oauthStateStore = deps.oauthStateStore ?? new RedisOAuthStateStore();
 
   app.get("/auth/qbo/status", async (_request: FastifyRequest, reply: FastifyReply) => {
@@ -54,7 +54,8 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDe
     });
   });
 
-  // Protected by apiKeyMiddleware (accepts ?apiKey= query param — see middleware/api-key.ts)
+  // Protected by apiKeyMiddleware. Browser navigation cannot set headers, so
+  // apiKeyMiddleware allows ?apiKey= only for this OAuth start route.
   app.get("/auth/qbo/start", async (_request: FastifyRequest, reply: FastifyReply) => {
     const state = randomUUID();
     const frontendUrl = env.FRONTEND_URL;
@@ -68,8 +69,12 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDe
 
     return reply.redirect(authUri);
   });
+}
 
-  // Exempt from apiKeyMiddleware — registered before the hook in routes.ts
+export async function registerPublicAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps = {}): Promise<void> {
+  const oauthStateStore = deps.oauthStateStore ?? new RedisOAuthStateStore();
+
+  // Exempt from apiKeyMiddleware — registered before the hook in routes.ts.
   app.get("/auth/qbo/callback", async (request: FastifyRequest, reply: FastifyReply) => {
     const { code, state, realmId } = request.query as Record<string, string>;
 
@@ -110,4 +115,9 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDe
       return reply.redirect(`${frontendUrl}?auth=error&message=${encodeURIComponent("QBO authorization failed")}`);
     }
   });
+}
+
+export async function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps = {}): Promise<void> {
+  await registerProtectedAuthRoutes(app, deps);
+  await registerPublicAuthRoutes(app, deps);
 }

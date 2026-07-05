@@ -15,7 +15,7 @@ const QBOLineSchema = z.object({
   Id: z.string().optional(),
   LineNum: z.number().optional(),
   Amount: z.number(),
-  DetailType: z.union([z.literal("SalesItemLineDetail"), z.literal("DescriptionOnly")]),
+  DetailType: z.string(),
   SalesItemLineDetail: z.object({
     ItemRef: QBORefSchema,
     AccountRef: z.object({ value: z.string() }).optional(),
@@ -23,8 +23,9 @@ const QBOLineSchema = z.object({
     Qty: z.number().optional(),
     UnitPrice: z.number().optional(),
   }).optional(),
+  SubTotalLineDetail: z.unknown().optional(),
   Description: z.string().optional(),
-});
+}).passthrough();
 const QBOInvoiceEntitySchema = z.object({
   Id: z.string().optional(),
   SyncToken: z.string().optional(),
