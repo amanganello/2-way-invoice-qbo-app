@@ -34,16 +34,21 @@ function buildLines(
       );
     }
 
+    const unitPrice = parseFloat(li.unitPrice);
+    const qty = li.quantity;
+    // QBO validates Amount === UnitPrice × Qty — derive it rather than trusting li.amount
+    const amount = Math.round(unitPrice * qty * 100) / 100;
+
     return {
-      Amount: parseFloat(li.amount),
+      Amount: amount,
       DetailType: "SalesItemLineDetail",
       Description: li.description,
       SalesItemLineDetail: {
         ItemRef: { value: itemId },
         ...(accountMapping && { AccountRef: { value: accountMapping.qboAccountId } }),
         TaxCodeRef: { value: mapping?.taxCode ?? "NON" },
-        Qty: li.quantity,
-        UnitPrice: parseFloat(li.unitPrice),
+        Qty: qty,
+        UnitPrice: unitPrice,
       },
     };
   });
