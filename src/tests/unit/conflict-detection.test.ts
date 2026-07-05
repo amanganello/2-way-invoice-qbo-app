@@ -6,8 +6,8 @@ function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {
   return {
     id: "inv-1",
     customerId: "cust-1",
-    lineItems: [{ description: "Service", quantity: 1, unitPrice: 100, amount: 100 }],
-    totalAmount: 100,
+    lineItems: [{ description: "Service", quantity: 1, unitPrice: "100.00", amount: "100.00" }],
+    totalAmount: "100.00",
     currency: "USD",
     status: "sent",
     dueDate: new Date("2030-01-01"),
@@ -23,7 +23,7 @@ describe("detectConflicts", () => {
     const result = detectConflicts(snapshot, makeInvoice(), makeInvoice());
     expect(result.hasConflict).toBe(false);
     if (!result.hasConflict) {
-      expect(result.mergedInvoice.totalAmount).toBe(100);
+      expect(result.mergedInvoice.totalAmount).toBe("100.00");
     }
   });
 
@@ -40,7 +40,7 @@ describe("detectConflicts", () => {
 
   it("keeps internal-only change with no conflict (e.g. lineItems updated internally)", () => {
     const snapshot = makeInvoice();
-    const newLine = [{ description: "Updated", quantity: 2, unitPrice: 50, amount: 100 }];
+    const newLine = [{ description: "Updated", quantity: 2, unitPrice: "50.00", amount: "100.00" }];
     const internal = makeInvoice({ lineItems: newLine });
     const qbo = makeInvoice(); // unchanged
     const result = detectConflicts(snapshot, internal, qbo);
@@ -63,9 +63,9 @@ describe("detectConflicts", () => {
 
   it("auto-resolves lineItems conflict in favour of internal", () => {
     const snapshot = makeInvoice();
-    const newLine = [{ description: "New", quantity: 3, unitPrice: 40, amount: 120 }];
+    const newLine = [{ description: "New", quantity: 3, unitPrice: "40.00", amount: "120.00" }];
     const internal = makeInvoice({ lineItems: newLine });
-    const qbo = makeInvoice({ lineItems: [{ description: "QBO edit", quantity: 1, unitPrice: 200, amount: 200 }] });
+    const qbo = makeInvoice({ lineItems: [{ description: "QBO edit", quantity: 1, unitPrice: "200.00", amount: "200.00" }] });
     const result = detectConflicts(snapshot, internal, qbo);
     expect(result.hasConflict).toBe(false);
     if (!result.hasConflict) {

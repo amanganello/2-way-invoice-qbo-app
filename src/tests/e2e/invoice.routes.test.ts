@@ -13,7 +13,7 @@ describe("Invoice routes", () => {
             id,
             customerId: "cust-1",
             lineItems: [],
-            totalAmount: 100,
+            totalAmount: "100.00",
             currency: "USD",
             status: "draft",
             dueDate: new Date("2030-01-01"),
@@ -78,10 +78,10 @@ describe("Invoice routes", () => {
     });
 
     expect(response.statusCode).toBe(201);
-    const body = response.json<{ customerId: string; totalAmount: number; lineItems: unknown[] }>();
+    const body = response.json<{ customerId: string; totalAmount: string; lineItems: unknown[] }>();
 
     expect(body.customerId).toBe("cust-1");
-    expect(body.totalAmount).toBe(20);
+    expect(body.totalAmount).toBe("20.00");
     expect(Array.isArray(body.lineItems)).toBe(true);
   });
 
@@ -98,10 +98,10 @@ describe("Invoice routes", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    const body = response.json<{ id: string; totalAmount: number }>();
+    const body = response.json<{ id: string; totalAmount: string }>();
 
     expect(body.id).toBe("inv-1");
-    expect(body.totalAmount).toBe(150);
+    expect(body.totalAmount).toBe("150.00");
   });
 
   it("PATCH /invoices/:id returns 404 when invoice not found", async () => {

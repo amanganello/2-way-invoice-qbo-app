@@ -6,7 +6,7 @@ import type { SyncLinkRecord } from "@/infrastructure/database/sync-link.reposit
 function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {
   return {
     id: "inv-1", customerId: "cust-1", lineItems: [],
-    totalAmount: 100, currency: "USD", status: "sent",
+    totalAmount: "100.00", currency: "USD", status: "sent",
     dueDate: new Date("2030-01-01"), createdAt: new Date(), updatedAt: new Date(),
     ...overrides,
   };
@@ -129,8 +129,8 @@ describe("reconcileInvoice", () => {
 
   it("blocks update when lineItems changed on a partially-paid invoice", async () => {
     const snapshot = {
-      lineItems: [{ description: "Original", quantity: 1, unitPrice: 100, amount: 100 }],
-      totalAmount: 100,
+      lineItems: [{ description: "Original", quantity: 1, unitPrice: "100.00", amount: "100.00" }],
+      totalAmount: "100.00",
       currency: "USD",
       status: "sent",
       customerId: "cust-1",
@@ -141,7 +141,7 @@ describe("reconcileInvoice", () => {
         ...makeDeps().invoiceRepo,
         findById: vi.fn(async () =>
           makeInvoice({
-            lineItems: [{ description: "Changed", quantity: 2, unitPrice: 50, amount: 100 }],
+            lineItems: [{ description: "Changed", quantity: 2, unitPrice: "50.00", amount: "100.00" }],
           })
         ),
       },
@@ -198,7 +198,7 @@ describe("reconcileInvoice", () => {
   it("allows update when only dueDate changed on a partially-paid invoice", async () => {
     const snapshot = {
       lineItems: [],
-      totalAmount: 100,
+      totalAmount: "100.00",
       currency: "USD",
       status: "sent",
       customerId: "cust-1",

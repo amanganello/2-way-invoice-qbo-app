@@ -6,7 +6,7 @@ import type { SyncLinkRecord } from "@/infrastructure/database/sync-link.reposit
 function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {
   return {
     id: "inv-1", customerId: "cust-1", lineItems: [],
-    totalAmount: 100, currency: "USD", status: "sent",
+    totalAmount: "100.00", currency: "USD", status: "sent",
     dueDate: new Date("2030-01-01"), createdAt: new Date("2026-01-01"), updatedAt: new Date("2026-01-01"),
     ...overrides,
   };

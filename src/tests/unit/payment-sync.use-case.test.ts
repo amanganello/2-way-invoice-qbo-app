@@ -3,7 +3,7 @@ import { syncPayment } from "@/application/sync/payment-sync.use-case.js";
 import type { Payment } from "@/domain/invoices/invoice.types.js";
 
 function makePayment(overrides: Partial<Payment> = {}): Payment {
-  return { id: "pay-1", invoiceId: "inv-1", amount: 100, currency: "USD", paidAt: new Date(), ...overrides };
+  return { id: "pay-1", invoiceId: "inv-1", amount: "100.00", currency: "USD", paidAt: new Date(), ...overrides };
 }
 
 function makeDeps() {
@@ -16,7 +16,7 @@ function makeDeps() {
         id: "inv-1",
         customerId: "cust-1",
         lineItems: [],
-        totalAmount: 100,
+        totalAmount: "100.00",
         currency: "USD",
         status: "sent" as const,
         dueDate: new Date(),
