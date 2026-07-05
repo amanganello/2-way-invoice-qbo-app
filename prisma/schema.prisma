@@ -75,7 +75,7 @@ model Payment {
 model SyncLink {
   id                  String     @id @default(cuid())
   internalId          String     @unique
-  qboId               String?
+  qboId               String?    @unique
   internalUpdatedAt   DateTime
   qboUpdatedAt        DateTime?
   qboSyncToken        String?
@@ -90,7 +90,6 @@ model SyncLink {
   auditLogs AuditLog[]
 
   @@index([syncStatus])
-  @@index([qboId])
 }
 
 model PaymentSyncLink {
