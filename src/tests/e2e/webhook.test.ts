@@ -10,6 +10,7 @@ function makeSignature(body: string): string {
 }
 
 const mockQueue = { add: vi.fn(async () => ({ id: "job-1" })) };
+const mockSyncQueue = { enqueueReconcile: vi.fn(async () => {}) };
 const mockPrisma = {
   eventLog: {
     createMany: vi.fn(async ({ data }: { data: unknown[] }) => ({ count: data.length })),
@@ -20,7 +21,7 @@ describe("POST /webhooks/qbo", () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
-    vi.doMock("@/infrastructure/queue/queues", () => ({ invoiceSyncQueue: mockQueue }));
+    vi.doMock("@/infrastructure/queue/queues", () => ({ invoiceSyncQueue: mockQueue, syncQueue: mockSyncQueue }));
     vi.doMock("@/infrastructure/database/prisma", () => ({ prisma: mockPrisma }));
     vi.doMock("@/infrastructure/queue/redis", () => ({
       redisConnection: { ping: vi.fn(async () => "PONG") },

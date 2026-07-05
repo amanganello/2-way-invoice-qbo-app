@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "@/app";
+import { InMemoryOAuthStateStore } from "@/infrastructure/http/auth/oauth-state-store";
 
 // Mock intuit-oauth before any imports that use it
 const mockAuthorizeUri = vi.fn(() => "https://appcenter.intuit.com/connect/oauth2?mock=1");
@@ -41,7 +42,7 @@ describe("Auth routes", () => {
     }));
     const { registerRoutes } = await import("@/infrastructure/http/routes");
     app = buildApp();
-    await registerRoutes(app);
+    await registerRoutes(app, { auth: { oauthStateStore: new InMemoryOAuthStateStore() } });
     await app.ready();
   });
 
@@ -83,12 +84,12 @@ describe("Auth routes", () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it("GET /auth/qbo/status accepts API key via ?apiKey= query param", async () => {
+  it("GET /auth/qbo/status rejects API key via ?apiKey= query param", async () => {
     const res = await app.inject({
       method: "GET",
       url: "/auth/qbo/status?apiKey=test-api-key",
     });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(401);
   });
 
   it("GET /auth/qbo/start returns 401 without API key", async () => {

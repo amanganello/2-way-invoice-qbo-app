@@ -20,11 +20,16 @@ const mockPrisma = {
 
 const mockSyncLinkRepo = {
   findByInternalId: vi.fn(async () => null),
+  findById: vi.fn(async () => mockSyncLink),
+  list: vi.fn(async () => [mockSyncLink]),
+  listConflicts: vi.fn(async () => [mockSyncLink]),
+  findInvoicesWithoutSyncLink: vi.fn(async () => []),
   create: vi.fn(async () => mockSyncLink),
   setStatus: vi.fn(async () => mockSyncLink),
 };
 
 const mockInvoiceSyncQueue = { add: vi.fn(async () => ({ id: "job-1" })) };
+const mockSyncQueue = { enqueueReconcile: vi.fn(async () => {}) };
 const mockAuditLogRepo = { findBySyncLinkId: vi.fn(async () => []) };
 
 describe("Sync routes", () => {
@@ -34,7 +39,7 @@ describe("Sync routes", () => {
     vi.doMock("@/infrastructure/database/prisma", () => ({ prisma: mockPrisma }));
     vi.doMock("@/infrastructure/database/sync-link.repository", () => ({ syncLinkRepository: mockSyncLinkRepo }));
     vi.doMock("@/infrastructure/database/audit-log.repository", () => ({ auditLogRepository: mockAuditLogRepo }));
-    vi.doMock("@/infrastructure/queue/queues", () => ({ invoiceSyncQueue: mockInvoiceSyncQueue }));
+    vi.doMock("@/infrastructure/queue/queues", () => ({ invoiceSyncQueue: mockInvoiceSyncQueue, syncQueue: mockSyncQueue }));
     vi.doMock("@/infrastructure/queue/redis", () => ({ redisConnection: { ping: vi.fn(async () => "PONG") } }));
 
     const { registerRoutes } = await import("@/infrastructure/http/routes");
@@ -70,7 +75,7 @@ describe("Sync routes", () => {
   });
 
   it("POST /sync/conflicts/:id/resolve accept-internal re-enqueues reconcile", async () => {
-    mockInvoiceSyncQueue.add.mockClear();
+    mockSyncQueue.enqueueReconcile.mockClear();
     mockSyncLinkRepo.setStatus.mockClear();
     const res = await app.inject({
       method: "POST", url: "/sync/conflicts/sl-1/resolve",
@@ -79,13 +84,11 @@ describe("Sync routes", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(mockSyncLinkRepo.setStatus).toHaveBeenCalledWith("sl-1", 0, "PENDING", {});
-    expect(mockInvoiceSyncQueue.add).toHaveBeenCalledWith(
-      "reconcile", { internalId: "inv-1" }, expect.objectContaining({ jobId: "reconcile-inv-1" })
-    );
+    expect(mockSyncQueue.enqueueReconcile).toHaveBeenCalledWith("inv-1");
   });
 
   it("POST /sync/conflicts/:id/resolve accept-qbo sets SYNCED and skips enqueue", async () => {
-    mockInvoiceSyncQueue.add.mockClear();
+    mockSyncQueue.enqueueReconcile.mockClear();
     mockSyncLinkRepo.setStatus.mockClear();
     const res = await app.inject({
       method: "POST", url: "/sync/conflicts/sl-1/resolve",
@@ -94,7 +97,7 @@ describe("Sync routes", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(mockSyncLinkRepo.setStatus).toHaveBeenCalledWith("sl-1", 0, "SYNCED", {});
-    expect(mockInvoiceSyncQueue.add).not.toHaveBeenCalled();
+    expect(mockSyncQueue.enqueueReconcile).not.toHaveBeenCalled();
   });
 
   it("POST /sync/initial-load/qbo-to-internal returns 501", async () => {
