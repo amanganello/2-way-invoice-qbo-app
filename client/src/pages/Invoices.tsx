@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getInvoices, createInvoice, updateInvoice, getSyncLinks, getMappings } from '../lib/api'
-import type { Invoice, LineItem, CreateInvoiceBody, SyncLink, CustomerMap, ApiLineItem } from '../lib/api'
+import type { Invoice, CreateInvoiceBody, SyncLink, CustomerMap, ApiLineItem } from '../lib/api'
 import { usePolling } from '../lib/usePolling'
 import { StatusBadge } from '../components/StatusBadge'
 import { Spinner } from '../components/Spinner'
@@ -57,9 +57,14 @@ export function Invoices() {
     setError(null)
   }
 
-  function updateLine(i: number, field: keyof LineItem, value: string | number) {
+  function updateLine(i: number, field: 'description' | 'quantity' | 'unitPrice', value: string | number) {
     setForm(f => {
-      const lines = f.lineItems.map((l, idx) => idx === i ? { ...l, [field]: value } : l)
+      const lines = f.lineItems.map((l, idx) => {
+        if (idx !== i) return l
+        const updated = { ...l, [field]: value }
+        updated.amount = Number((updated.quantity * updated.unitPrice).toFixed(2))
+        return updated
+      })
       return { ...f, lineItems: lines }
     })
   }
@@ -243,7 +248,7 @@ export function Invoices() {
                   </button>
                 </div>
                 <div className="rounded-md border border-gray-200 overflow-hidden">
-                  <div className="grid grid-cols-[1fr_80px_90px_90px_32px] gap-0 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-500 border-b border-gray-200">
+                  <div className="grid grid-cols-[1fr_80px_100px_90px_32px] gap-0 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-500 border-b border-gray-200">
                     <span>Description</span>
                     <span>Qty</span>
                     <span>Unit Price</span>
@@ -251,7 +256,7 @@ export function Invoices() {
                     <span />
                   </div>
                   {form.lineItems.map((line, i) => (
-                    <div key={i} className="grid grid-cols-[1fr_80px_90px_90px_32px] gap-0 border-b border-gray-100 last:border-0">
+                    <div key={i} className="grid grid-cols-[1fr_80px_100px_90px_32px] gap-0 border-b border-gray-100 last:border-0">
                       <input
                         placeholder="Description"
                         className="border-r border-gray-100 px-3 py-2 text-sm focus:outline-none focus:bg-blue-50"
@@ -260,7 +265,8 @@ export function Invoices() {
                       />
                       <input
                         type="number"
-                        min={0}
+                        min={1}
+                        step={1}
                         className="border-r border-gray-100 px-2 py-2 text-sm text-center focus:outline-none focus:bg-blue-50"
                         value={line.quantity}
                         onChange={e => updateLine(i, 'quantity', Number(e.target.value))}
@@ -268,19 +274,14 @@ export function Invoices() {
                       <input
                         type="number"
                         min={0}
-                        step="0.01"
+                        step={1}
                         className="border-r border-gray-100 px-2 py-2 text-sm text-right focus:outline-none focus:bg-blue-50"
                         value={line.unitPrice}
                         onChange={e => updateLine(i, 'unitPrice', Number(e.target.value))}
                       />
-                      <input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        className="border-r border-gray-100 px-2 py-2 text-sm text-right focus:outline-none focus:bg-blue-50"
-                        value={line.amount}
-                        onChange={e => updateLine(i, 'amount', Number(e.target.value))}
-                      />
+                      <div className="border-r border-gray-100 px-2 py-2 text-sm text-right text-gray-700 flex items-center justify-end">
+                        {line.amount.toFixed(2)}
+                      </div>
                       <button
                         onClick={() => removeLine(i)}
                         className="flex items-center justify-center text-gray-300 hover:text-red-500"
