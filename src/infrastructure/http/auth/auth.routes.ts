@@ -50,7 +50,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // Protected by apiKeyMiddleware (accepts ?apiKey= query param — see middleware/api-key.ts)
-  app.get("/auth/qbo/start", async (request: FastifyRequest, reply: FastifyReply) => {
+  app.get("/auth/qbo/start", async (_request: FastifyRequest, reply: FastifyReply) => {
     const state = randomUUID();
     const frontendUrl = env.FRONTEND_URL;
     pendingStates.set(state, { expiresAt: Date.now() + 10 * 60 * 1000, frontendUrl });
