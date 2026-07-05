@@ -87,7 +87,20 @@ export async function registerWebhookRoutes(app: FastifyInstance): Promise<void>
         for (const entity of entities) {
           const eventId = `${entity.name}-${entity.id}-${entity.lastUpdated}`;
 
-          // Deduplicate via unique EventLog insert — constraint is the guard, not a pre-check
+          // Enqueue BEFORE writing EventLog — if enqueue fails, no dedup row committed, QBO can retry
+          try {
+            await invoiceSyncQueue.add(
+              "pull",
+              { qboId: entity.id, eventType: entity.operation, eventId },
+              { jobId: `pull-${entity.id}` }
+            );
+          } catch (err) {
+            logger.error({ err, qboId: entity.id, eventId }, "Failed to enqueue pull job");
+            return reply.status(503).send({ error: "Queue unavailable" });
+          }
+
+          // Write EventLog after job is durably queued
+          // skipDuplicates handles concurrent retries; count === 0 means duplicate event
           const result = await prisma.eventLog.createMany({
             data: [{
               eventId,
@@ -98,19 +111,9 @@ export async function registerWebhookRoutes(app: FastifyInstance): Promise<void>
             skipDuplicates: true,
           });
 
-          if (result.count === 0) continue; // already processed
-
-          // Guard: if Redis fails between the ping check and the enqueue, the EventLog row
-          // is already committed and QBO will not retry — return 503 to signal failure.
-          try {
-            await invoiceSyncQueue.add(
-              "pull",
-              { qboId: entity.id, eventType: entity.operation, eventId },
-              { jobId: `pull-${entity.id}` }
-            );
-          } catch (err) {
-            logger.error({ err, qboId: entity.id, eventId }, "Failed to enqueue pull job");
-            return reply.status(503).send({ error: "Queue unavailable" });
+          if (result.count === 0) {
+            // Duplicate event — enqueue above was redundant but BullMQ jobId dedup is safe
+            logger.debug({ eventId }, "Duplicate webhook event — skipped EventLog");
           }
         }
 

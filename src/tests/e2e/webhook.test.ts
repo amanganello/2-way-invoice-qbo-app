@@ -69,7 +69,7 @@ describe("POST /webhooks/qbo", () => {
     );
   });
 
-  it("returns 200 immediately when EventLog insert finds duplicate (count=0)", async () => {
+  it("returns 200 when EventLog insert finds duplicate (count=0), after enqueuing", async () => {
     mockQueue.add.mockClear();
     mockPrisma.eventLog.createMany.mockResolvedValue({ count: 0 });
     const sig = makeSignature(payload);
@@ -78,6 +78,23 @@ describe("POST /webhooks/qbo", () => {
       headers: { "intuit-signature-hash": sig, "content-type": "application/json" },
     });
     expect(res.statusCode).toBe(200);
-    expect(mockQueue.add).not.toHaveBeenCalled();
+    // Job is enqueued BEFORE checking for duplicates; BullMQ jobId dedup prevents actual duplication
+    expect(mockQueue.add).toHaveBeenCalledWith(
+      "pull",
+      expect.objectContaining({ qboId: "qbo-123" }),
+      expect.objectContaining({ jobId: "pull-qbo-123" })
+    );
+  });
+
+  it("returns 503 and does NOT commit EventLog when enqueue fails", async () => {
+    mockPrisma.eventLog.createMany.mockClear();
+    mockQueue.add.mockRejectedValueOnce(new Error("Redis unavailable"));
+    const sig = makeSignature(payload);
+    const res = await app.inject({
+      method: "POST", url: "/webhooks/qbo", payload,
+      headers: { "intuit-signature-hash": sig, "content-type": "application/json" },
+    });
+    expect(res.statusCode).toBe(503);
+    expect(mockPrisma.eventLog.createMany).not.toHaveBeenCalled();
   });
 });
