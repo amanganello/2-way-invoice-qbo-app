@@ -50,8 +50,24 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
 
 process.on("unhandledRejection", (reason) => {
-  app.log.fatal({ err: reason }, "Unhandled promise rejection");
-  process.exit(1);
+  const logContext = {
+    err: reason,
+    reason:
+      reason instanceof Error
+        ? {
+            name: reason.name,
+            message: reason.message,
+            stack: reason.stack,
+          }
+        : reason,
+  };
+
+  if (env.RUN_WORKERS_IN_WEB) {
+    app.log.error(logContext, "Unhandled promise rejection; keeping web process alive for demo worker mode");
+  } else {
+    app.log.fatal(logContext, "Unhandled promise rejection");
+    process.exit(1);
+  }
 });
 
 try {
