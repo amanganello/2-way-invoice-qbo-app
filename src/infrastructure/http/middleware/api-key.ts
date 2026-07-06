@@ -2,7 +2,8 @@ import type { FastifyRequest, FastifyReply, HookHandlerDoneFunction } from "fast
 import { timingSafeEqual } from "node:crypto";
 import { env } from "@/config/env.js";
 
-const UNPROTECTED = ["/health", "/webhooks/qbo", "/auth/qbo/callback"];
+const UNPROTECTED_PREFIXES = ["/health", "/webhooks/qbo", "/auth/qbo/callback", "/assets/"];
+const UNPROTECTED_EXACT = new Set(["/", "/index.html", "/favicon.ico", "/vite.svg"]);
 
 function keyMatches(provided: string): boolean {
   const expected = env.API_KEY;
@@ -21,7 +22,9 @@ export function apiKeyMiddleware(
   reply: FastifyReply,
   done: HookHandlerDoneFunction
 ): void {
-  if (UNPROTECTED.some(path => request.url.startsWith(path))) {
+  const path = request.url.split("?")[0] ?? request.url;
+
+  if (UNPROTECTED_EXACT.has(path) || UNPROTECTED_PREFIXES.some(prefix => path.startsWith(prefix))) {
     return done();
   }
 
