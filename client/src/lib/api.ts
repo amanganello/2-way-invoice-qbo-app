@@ -100,3 +100,13 @@ export function getMappings(apiKey?: string) {
 export function triggerInitialLoad(apiKey?: string) {
   return req<{ enqueued: number; skipped: number }>('POST', '/sync/initial-load/internal-to-qbo', undefined, apiKey)
 }
+
+export function importFromQbo(params?: { limit?: number; startPosition?: number }, apiKey?: string) {
+  const qs = new URLSearchParams()
+  if (params?.limit !== undefined) qs.set('limit', String(params.limit))
+  if (params?.startPosition !== undefined) qs.set('startPosition', String(params.startPosition))
+  const query = qs.toString()
+  return req<{ scanned: number; imported: number; skippedExisting: number; startPosition: number; nextStartPosition: number | null }>(
+    'POST', `/sync/initial-load/qbo-to-internal${query ? `?${query}` : ''}`, undefined, apiKey
+  )
+}

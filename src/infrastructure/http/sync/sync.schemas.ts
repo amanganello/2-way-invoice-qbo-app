@@ -14,3 +14,8 @@ export const ResolveConflictSchema = z.discriminatedUnion("strategy", [
   z.object({ strategy: z.literal("accept-internal") }),
   z.object({ strategy: z.literal("accept-qbo") }),
 ]);
+
+export const QboInitialLoadQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(100),
+  startPosition: z.coerce.number().int().min(1).default(1),
+});

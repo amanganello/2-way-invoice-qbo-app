@@ -20,12 +20,14 @@ const mockPrisma = {
 
 const mockSyncLinkRepo = {
   findByInternalId: vi.fn(async () => null),
+  findByQboId: vi.fn(async () => null),
   findById: vi.fn(async () => mockSyncLink),
   list: vi.fn(async () => [mockSyncLink]),
   listConflicts: vi.fn(async () => [mockSyncLink]),
   findInvoicesWithoutSyncLink: vi.fn(async () => []),
   create: vi.fn(async () => mockSyncLink),
   setStatus: vi.fn(async () => mockSyncLink),
+  upsertLinked: vi.fn(async () => mockSyncLink),
 };
 
 const mockInvoiceSyncQueue = { add: vi.fn(async () => ({ id: "job-1" })) };
@@ -41,6 +43,20 @@ describe("Sync routes", () => {
     vi.doMock("@/infrastructure/database/audit-log.repository", () => ({ auditLogRepository: mockAuditLogRepo }));
     vi.doMock("@/infrastructure/queue/queues", () => ({ invoiceSyncQueue: mockInvoiceSyncQueue, syncQueue: mockSyncQueue }));
     vi.doMock("@/infrastructure/queue/redis", () => ({ redisConnection: { ping: vi.fn(async () => "PONG") } }));
+    vi.doMock("@/infrastructure/qbo/qbo-invoice.adapter", () => ({
+      QBOInvoiceAdapter: class {
+        listInvoices = vi.fn(async () => []);
+        getInvoice = vi.fn(); createInvoice = vi.fn(); updateInvoice = vi.fn();
+        voidInvoice = vi.fn(); findByDocNumber = vi.fn();
+      },
+    }));
+    vi.doMock("@/infrastructure/database/invoice.repository", () => ({
+      PrismaInvoiceRepository: class {
+        findById = vi.fn(async () => null);
+        save = vi.fn(async (inv: unknown) => inv);
+        findAll = vi.fn(async () => []);
+      },
+    }));
 
     const { registerRoutes } = await import("@/infrastructure/http/routes.js");
     app = buildApp();
@@ -100,9 +116,14 @@ describe("Sync routes", () => {
     expect(mockSyncQueue.enqueueReconcile).not.toHaveBeenCalled();
   });
 
-  it("POST /sync/initial-load/qbo-to-internal returns 501", async () => {
+  it("POST /sync/initial-load/qbo-to-internal returns 200 with zero counts when QBO is empty", async () => {
     const res = await app.inject({ method: "POST", url: "/sync/initial-load/qbo-to-internal", headers: AUTH });
-    expect(res.statusCode).toBe(501);
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ scanned: number; imported: number; skippedExisting: number; nextStartPosition: null }>();
+    expect(body.scanned).toBe(0);
+    expect(body.imported).toBe(0);
+    expect(body.skippedExisting).toBe(0);
+    expect(body.nextStartPosition).toBeNull();
   });
 
   it("POST /sync/initial-load/internal-to-qbo returns enqueued count", async () => {

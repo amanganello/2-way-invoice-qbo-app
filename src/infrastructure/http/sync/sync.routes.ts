@@ -6,6 +6,8 @@ import { itemMapRepository } from "@/infrastructure/database/item-map.repository
 import { syncLinkRepository } from "@/infrastructure/database/sync-link.repository.js";
 import { syncQueue } from "@/infrastructure/queue/queues.js";
 import { QBOCatalogAdapter } from "@/infrastructure/qbo/qbo-catalog.adapter.js";
+import { QBOInvoiceAdapter } from "@/infrastructure/qbo/qbo-invoice.adapter.js";
+import { PrismaInvoiceRepository } from "@/infrastructure/database/invoice.repository.js";
 import {
   getSyncLinkDetail,
   importQboMappings,
@@ -14,9 +16,10 @@ import {
   listSyncLinks,
   resolveConflict,
   runInitialInternalLoad,
+  runInitialQboLoad,
   type SyncManagementDeps,
 } from "@/application/sync/sync-management.use-cases.js";
-import { ResolveConflictSchema, SyncLinkParamsSchema, SyncLinksQuerySchema } from "./sync.schemas.js";
+import { QboInitialLoadQuerySchema, ResolveConflictSchema, SyncLinkParamsSchema, SyncLinksQuerySchema } from "./sync.schemas.js";
 
 const deps: SyncManagementDeps = {
   syncLinkRepo: syncLinkRepository,
@@ -55,12 +58,16 @@ export async function registerSyncRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(await runInitialInternalLoad(deps, limit));
   });
 
-  app.post("/sync/initial-load/qbo-to-internal", async (_request: FastifyRequest, reply: FastifyReply) => {
-    return reply.status(501).send({
-      error: "NotImplemented",
-      statusCode: 501,
-      message: "qbo-to-internal initial load is not implemented in this version. See README Tradeoffs section.",
-    });
+  app.post("/sync/initial-load/qbo-to-internal", async (request: FastifyRequest, reply: FastifyReply) => {
+    const { limit, startPosition } = QboInitialLoadQuerySchema.parse(request.query);
+    return reply.send(await runInitialQboLoad(
+      {
+        syncLinkRepo: deps.syncLinkRepo,
+        invoiceRepo: new PrismaInvoiceRepository(),
+        qboInvoicePort: new QBOInvoiceAdapter(),
+      },
+      { limit, startPosition }
+    ));
   });
 
   app.post("/sync/mappings/import", async (_request: FastifyRequest, reply: FastifyReply) => {

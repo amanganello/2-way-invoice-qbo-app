@@ -131,6 +131,17 @@ also writes directly to the database repository and never calls the
 invoice use-case — calling the use-case would re-enqueue a reconcile
 job for every inbound QBO change, creating an infinite push/pull loop.
 
+**Round-trip Create race condition:** when the reconcile worker creates
+an invoice in QBO, QBO fires a webhook before `upsertLinked` completes
+and writes the `qboId` back to the SyncLink. The pull worker receives
+the webhook, finds no SyncLink for the new `qboId`, and would previously
+create a duplicate internal invoice. The fix: `pullInvoice` skips any
+`qboId` that has no SyncLink for non-void/delete events and records a
+`skipped_unknown_qbo_invoice` audit log entry. Entity discovery (i.e.
+learning about QBO invoices that were never pushed from our system) is
+handled exclusively by the QBO → internal bulk import endpoint, not by
+the webhook path.
+
 ---
 
 ## Idempotency
@@ -249,13 +260,20 @@ and accessible via `GET /sync/links/:id`.
 **Internal → QBO** queues one reconcile job for each internal invoice
 without a `SyncLink`.
 
-**QBO → internal** returns 501 in this version. The intended design is to
-paginate QBO invoices, import them with deterministic internal ids based
-on QBO ids, and create `SYNCED` SyncLinks without enqueueing reconcile
-jobs. This was deferred because QBO `DocNumber` is user-editable and
-therefore unsafe as identity; a production-ready import needs a dedicated
-mapping strategy and idempotent transaction handling to avoid duplicate
-accounting records.
+**QBO → internal** paginates QBO invoices via `SELECT * FROM Invoice
+STARTPOSITION {n} MAXRESULTS {limit}` and imports each one with a
+deterministic internal id derived from the QBO id (SHA-256 of
+`"qbo-import:<qboId>"` formatted as a UUID v4). SyncLinks are created
+with `syncStatus: SYNCED` and no reconcile job is enqueued — imported
+invoices are treated as already in sync. Idempotency is enforced by
+skipping any invoice whose `qboId` or deterministic internal id already
+has a SyncLink.
+
+A narrow race exists between `invoiceRepo.save` and `syncLinkRepo.upsertLinked`:
+if the reconcile watchdog runs in that window it creates a SyncLink and
+re-queues the invoice. The import handles this by checking
+`findByInternalId` before saving, and catching `ConflictError` as a
+safety net so the batch continues rather than aborting.
 
 Payments QBO → internal initial load is also deferred.
 
@@ -291,3 +309,25 @@ job is `active` is silently dropped; the next reconciliation cycle
 (≤15 min) recovers it. Production would add an
 `invoice.updatedAt > jobStartedAt` check before the worker exits: if
 true, re-enqueue immediately rather than waiting for the reconciler.
+
+**Non-atomic QBO → internal import** — `invoiceRepo.save` and
+`syncLinkRepo.upsertLinked` are two separate DB writes with no
+transaction boundary between them. If the process crashes or the
+reconcile watchdog runs in that window, the invoice can be picked up
+as an unlinked invoice and pushed to QBO as a new entity (creating a
+duplicate). The current mitigation — `findByInternalId` pre-check and
+`ConflictError` catch — reduces the blast radius but does not eliminate
+the window. The production fix is to create the SyncLink atomically with
+the invoice, either via a DB transaction or by inserting the SyncLink
+row first (the `internalId` FK is not enforced at the DB level, so the
+SyncLink can exist before the Invoice).
+
+**QBO-originated creates require manual import** — the webhook pull
+worker intentionally skips any `qboId` that has no SyncLink
+(`skipped_unknown_qbo_invoice` audit log). This prevents the
+round-trip Create duplicate, but it also means invoices created
+directly in QBO by an accountant are not automatically reflected
+locally. They only enter the system when an operator calls
+`POST /sync/initial-load/qbo-to-internal`. A production system would
+either run the import on a schedule or add a dedicated
+"QBO-create" webhook code path distinct from the update path.

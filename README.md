@@ -15,7 +15,9 @@ Key properties:
 - **Idempotent** — BullMQ jobId deduplication + EventLog unique constraint
   + find-or-link on duplicate QBO create
 - **Loop-safe** — pull path writes directly to the DB, never through the
-  invoice use-case, preventing infinite push/pull cycles
+  invoice use-case, preventing infinite push/pull cycles; webhook pull
+  skips unknown QBO ids so a reconcile-create webhook never produces a
+  duplicate (entity discovery is handled by the bulk import endpoint)
 - **Conflict-aware** — field-level rules auto-resolve most conflicts;
   `dueDate` changes on both sides require human resolution via API
 
@@ -276,8 +278,9 @@ API keys.
 
 - `POST /sync/initial-load/internal-to-qbo` — push all unlinked
   internal invoices to QBO (idempotent)
-- `POST /sync/initial-load/qbo-to-internal` — not implemented,
-  returns 501 (see DESIGN.md)
+- `POST /sync/initial-load/qbo-to-internal` — paginate QBO invoices and
+  import them locally with deterministic internal ids (`?limit=&startPosition=`).
+  Returns `{ scanned, imported, skippedExisting, startPosition, nextStartPosition }`.
 
 ### Mappings
 

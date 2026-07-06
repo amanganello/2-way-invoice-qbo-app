@@ -112,6 +112,7 @@ export interface QBOInvoicePort {
   ): Promise<QBOInvoiceResult>;
   voidInvoice(qboId: string, syncToken: string): Promise<QBOInvoiceResult>;
   findByDocNumber(docNumber: string): Promise<QBOInvoiceResult | null>;
+  listInvoices(params: { limit: number; startPosition: number }): Promise<QBOInvoiceResult[]>;
 }
 
 export interface QBOPaymentPort {

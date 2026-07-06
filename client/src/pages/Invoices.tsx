@@ -1,10 +1,58 @@
 import { useState, useEffect } from 'react'
-import { getInvoices, createInvoice, updateInvoice, getSyncLinks, getMappings } from '../lib/api'
+import { getInvoices, createInvoice, updateInvoice, getSyncLinks, getMappings, importFromQbo } from '../lib/api'
 import type { Invoice, CreateInvoiceBody, SyncLink, CustomerMap, ApiLineItem } from '../lib/api'
 import { usePolling } from '../lib/usePolling'
 import { StatusBadge } from '../components/StatusBadge'
 import { Spinner } from '../components/Spinner'
 import { ErrorBanner } from '../components/ErrorBanner'
+
+type DateFilter = 'all' | 'today' | 'yesterday' | 'last-week' | 'last-30-days'
+
+const DATE_FILTER_LABELS: Record<DateFilter, string> = {
+  all: 'All',
+  today: 'Today',
+  yesterday: 'Yesterday',
+  'last-week': 'Last 7 days',
+  'last-30-days': 'Last 30 days',
+}
+
+function applyDateFilter(invoices: Invoice[], filter: DateFilter): Invoice[] {
+  if (filter === 'all') return invoices
+  const now = new Date()
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  let from: Date
+  let until: Date | undefined
+  switch (filter) {
+    case 'today':
+      from = todayStart
+      break
+    case 'yesterday': {
+      const yesterday = new Date(todayStart)
+      yesterday.setDate(yesterday.getDate() - 1)
+      from = yesterday
+      until = todayStart
+      break
+    }
+    case 'last-week': {
+      const d = new Date(todayStart)
+      d.setDate(d.getDate() - 7)
+      from = d
+      break
+    }
+    case 'last-30-days': {
+      const d = new Date(todayStart)
+      d.setDate(d.getDate() - 30)
+      from = d
+      break
+    }
+  }
+  return invoices.filter(inv => {
+    const t = new Date(inv.createdAt).getTime()
+    if (t < from.getTime()) return false
+    if (until && t >= until.getTime()) return false
+    return true
+  })
+}
 
 const EMPTY_BODY: CreateInvoiceBody = {
   customerId: '',
@@ -44,13 +92,17 @@ export function Invoices() {
   const [modal, setModal] = useState<{ mode: 'create' | 'update'; invoice?: Invoice } | null>(null)
   const [form, setForm] = useState<CreateInvoiceBody>(EMPTY_BODY)
   const [saving, setSaving] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
   const [confirmVoid, setConfirmVoid] = useState<Invoice | null>(null)
   const [customers, setCustomers] = useState<CustomerMap[]>([])
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all')
 
   const syncLinkByInternalId = new Map<string, SyncLink>(
     (syncLinks ?? []).map(sl => [sl.internalId, sl])
   )
+  const filteredInvoices = applyDateFilter(invoices ?? [], dateFilter)
   const canSubmitInvoice = isInvoiceFormComplete(form)
 
   useEffect(() => {
@@ -125,6 +177,21 @@ export function Invoices() {
     }
   }
 
+  async function handleImportFromQbo() {
+    setImporting(true)
+    setError(null)
+    try {
+      const result = await importFromQbo()
+      setToast(`Imported ${result.imported} invoice${result.imported !== 1 ? 's' : ''} from QBO (${result.skippedExisting} already linked).`)
+      refreshInvoices()
+      setTimeout(() => setToast(null), 5000)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setImporting(false)
+    }
+  }
+
   async function handleVoid(inv: Invoice) {
     try {
       await updateInvoice(inv.id, { status: 'void' })
@@ -140,20 +207,54 @@ export function Invoices() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Invoices</h2>
-        <button
-          onClick={openCreate}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          + Create Invoice
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => void handleImportFromQbo()}
+            disabled={importing}
+            className="flex items-center gap-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {importing && <Spinner />}
+            Import from QBO
+          </button>
+          <button
+            onClick={openCreate}
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            + Create Invoice
+          </button>
+        </div>
       </div>
+
+      {toast && (
+        <div className="rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
+          {toast}
+        </div>
+      )}
 
       {error && <ErrorBanner message={error} />}
 
+      <div className="flex gap-1">
+        {(Object.keys(DATE_FILTER_LABELS) as DateFilter[]).map(f => (
+          <button
+            key={f}
+            onClick={() => setDateFilter(f)}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              dateFilter === f
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            {DATE_FILTER_LABELS[f]}
+          </button>
+        ))}
+      </div>
+
       {invoicesLoading ? (
         <div className="flex justify-center p-8"><Spinner /></div>
-      ) : (invoices ?? []).length === 0 ? (
-        <p className="text-sm text-gray-500">No invoices yet. Create one above.</p>
+      ) : filteredInvoices.length === 0 ? (
+        <p className="text-sm text-gray-500">
+          {dateFilter === 'all' ? 'No invoices yet. Create one above.' : `No invoices for "${DATE_FILTER_LABELS[dateFilter]}".`}
+        </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-gray-200">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
@@ -169,7 +270,7 @@ export function Invoices() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
-              {(invoices ?? []).map(inv => {
+              {filteredInvoices.map(inv => {
                 const sl = syncLinkByInternalId.get(inv.id)
                 return (
                   <tr key={inv.id}>

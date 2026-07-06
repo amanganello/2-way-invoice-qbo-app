@@ -1,4 +1,5 @@
-import { NotFoundError } from "@/shared/errors/app-error.js";
+import { createHash } from "node:crypto";
+import { ConflictError, NotFoundError } from "@/shared/errors/app-error.js";
 import type {
   AccountMapPort,
   AuditLogPort,
@@ -9,6 +10,8 @@ import type {
   SyncLinkPort,
   SyncStatusValue,
 } from "@/application/ports/sync.ports.js";
+import type { InvoiceRepository, QBOInvoicePort } from "@/domain/invoices/invoice.types.js";
+import { invoiceToSnapshot } from "./invoice-snapshot.js";
 
 export type SyncManagementDeps = {
   syncLinkRepo: SyncLinkPort;
@@ -120,6 +123,75 @@ export async function importQboMappings(deps: Pick<
   );
 
   return { accountsImported, itemsImported, customersImported };
+}
+
+function qboImportId(qboId: string): string {
+  const hash = createHash("sha256").update(`qbo-import:${qboId}`).digest("hex");
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
+}
+
+export async function runInitialQboLoad(
+  deps: Pick<SyncManagementDeps, "syncLinkRepo"> & {
+    invoiceRepo: InvoiceRepository;
+    qboInvoicePort: QBOInvoicePort;
+  },
+  params: { limit: number; startPosition: number }
+) {
+  const { syncLinkRepo, invoiceRepo, qboInvoicePort } = deps;
+  const results = await qboInvoicePort.listInvoices(params);
+
+  let imported = 0;
+  let skippedExisting = 0;
+
+  for (const qboResult of results) {
+    const existing = await syncLinkRepo.findByQboId(qboResult.qboId);
+    if (existing) {
+      skippedExisting++;
+      continue;
+    }
+
+    const internalId = qboImportId(qboResult.qboId);
+
+    // A prior partial run may have saved the invoice before crashing; the reconcile
+    // worker may have then created a SyncLink for it (with a qboId from a fresh push).
+    // In that case skip — the invoice is already managed, just under a different qboId.
+    const existingByInternalId = await syncLinkRepo.findByInternalId(internalId);
+    if (existingByInternalId) {
+      skippedExisting++;
+      continue;
+    }
+
+    try {
+      const now = new Date();
+      await invoiceRepo.save({ ...qboResult.invoice, id: internalId, createdAt: now, updatedAt: now });
+      await syncLinkRepo.upsertLinked(
+        internalId,
+        qboResult.qboId,
+        qboResult.qboSyncToken,
+        qboResult.qboUpdatedAt,
+        invoiceToSnapshot(qboResult.invoice),
+        0
+      );
+      imported++;
+    } catch (err) {
+      // Safety net: if the reconcile worker raced between save and upsertLinked,
+      // treat this invoice as already handled rather than aborting the whole batch.
+      if (err instanceof ConflictError) {
+        skippedExisting++;
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  const scanned = results.length;
+  return {
+    scanned,
+    imported,
+    skippedExisting,
+    startPosition: params.startPosition,
+    nextStartPosition: scanned === params.limit ? params.startPosition + params.limit : null,
+  };
 }
 
 export async function listMappings(deps: Pick<

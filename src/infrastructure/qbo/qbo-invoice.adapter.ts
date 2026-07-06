@@ -100,7 +100,7 @@ function toResult(entity: QBOInvoiceEntity, fallbackInvoice?: Partial<Invoice>):
     lineItems: (entity.Line ?? [])
       .filter(l => l.DetailType === "SalesItemLineDetail")
       .map(l => ({
-        description: l.Description ?? "",
+        description: l.Description?.trim() || "(no description)",
         quantity: l.SalesItemLineDetail?.Qty ?? 1,
         unitPrice: MoneySchema.parse(Number(l.SalesItemLineDetail?.UnitPrice ?? l.Amount).toFixed(2)),
         amount: MoneySchema.parse(Number(l.Amount).toFixed(2)),
@@ -204,5 +204,15 @@ export class QBOInvoiceAdapter implements QBOInvoicePort {
     const invoices = res.QueryResponse.Invoice;
     if (!invoices?.length) return null;
     return toResult(invoices[0]);
+  }
+
+  async listInvoices(params: { limit: number; startPosition: number }): Promise<QBOInvoiceResult[]> {
+    const res = await qboClient.request<QueryResponse>(
+      "GET",
+      `/query?query=${encodeURIComponent(`SELECT * FROM Invoice STARTPOSITION ${params.startPosition} MAXRESULTS ${params.limit}`)}&minorversion=65`,
+      undefined,
+      json => QueryResponseSchema.parse(json)
+    );
+    return (res.QueryResponse.Invoice ?? []).map(entity => toResult(entity));
   }
 }
