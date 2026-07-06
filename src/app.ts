@@ -69,9 +69,14 @@ export function buildApp() {
     body: unknown,
     done: (err: Error | null, result?: unknown) => void,
   ) => {
-    (_req as FastifyRequest & { rawBody?: string }).rawBody = body as string;
+    const raw = body as string;
+    (_req as FastifyRequest & { rawBody?: string }).rawBody = raw;
+    if (!raw) {
+      done(null, undefined);
+      return;
+    }
     try {
-      done(null, JSON.parse(body as string));
+      done(null, JSON.parse(raw));
     } catch (err) {
       done(err as Error, undefined);
     }

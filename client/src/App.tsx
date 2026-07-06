@@ -169,7 +169,10 @@ function ApiKeyPrompt({ onSaved }: { onSaved: (apiKey: string) => Promise<void> 
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<Tab>('invoices')
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    const params = new URLSearchParams(window.location.search)
+    return params.has('auth') ? 'auth' : 'invoices'
+  })
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [apiKeyStatus, setApiKeyStatus] = useState<'checking' | 'missing' | 'valid'>('checking')
 
