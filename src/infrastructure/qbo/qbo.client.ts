@@ -169,15 +169,21 @@ export class QBOClient {
       return newCreds.accessToken;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      logger.warn({ attempt, errMsg: msg }, "QBO token refresh attempt failed");
       // Never retry auth rejections — Intuit refresh tokens are one-time-use.
       // Retrying with a consumed token just burns the next token too.
-      // "invalid_grant" is OAuth2's canonical error for an expired/consumed refresh token.
-      const isAuthError = msg.includes("invalid_grant") || msg.toLowerCase().includes("unauthorized") || msg.toLowerCase().includes("401");
+      const isAuthError =
+        msg.includes("invalid_grant") ||
+        msg.includes("invalid_client") ||
+        msg.includes("invalid_token") ||
+        msg.toLowerCase().includes("unauthorized") ||
+        msg.toLowerCase().includes("401") ||
+        msg.toLowerCase().includes("403");
       if (!isAuthError && attempt < 3) {
         await new Promise(r => setTimeout(r, 5000));
         return this.refreshWithRetry(refreshToken, attempt + 1);
       }
-      logger.error({ err, attempt }, "QBO token refresh exhausted after 3 attempts");
+      logger.error({ err, attempt }, "QBO token refresh exhausted");
       throw new ExternalServiceError("QBO token refresh failed after 3 attempts");
     }
   }
