@@ -13,13 +13,14 @@ FROM deps AS build
 COPY tsconfig.json ./
 COPY prisma ./prisma
 COPY src ./src
+COPY scripts ./scripts
 # Add client build
 COPY client ./client
 RUN pnpm install --frozen-lockfile
 RUN cd client && pnpm build
 RUN pnpm prisma generate
 # Build API
-RUN pnpm exec tsc --project tsconfig.json
+RUN pnpm exec tsc --project tsconfig.json && node scripts/resolve-dist-aliases.mjs
 
 # Production image
 FROM node:24-alpine AS production
@@ -38,6 +39,6 @@ RUN pnpm prisma generate
 EXPOSE 3000
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://localhost:3000/health || exit 1
+  CMD wget -qO- "http://localhost:${PORT:-3000}/health" || exit 1
 
 CMD ["node", "dist/server.js"]
