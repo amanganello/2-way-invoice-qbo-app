@@ -82,7 +82,7 @@ export function buildApp() {
   // It is scoped to the /webhooks/qbo route only, via a Fastify encapsulated plugin
   // in src/infrastructure/http/webhooks/webhook.routes.ts, so it cannot affect other routes.
 
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
     if (error instanceof AppError) {
       return reply.status(error.statusCode).send({
         error: error.name,
@@ -103,7 +103,10 @@ export function buildApp() {
       });
     }
 
-    app.log.fatal({ err: error }, "Non-operational error — marking process unhealthy");
+    app.log.fatal(
+      { err: error, method: request.method, url: request.url },
+      "Non-operational error — marking process unhealthy"
+    );
     isHealthy = false;
     return reply.status(500).send({
       error: "InternalServerError",

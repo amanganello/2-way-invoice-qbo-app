@@ -48,6 +48,21 @@ describe("Auth routes", () => {
 
   afterAll(async () => { await app.close(); });
 
+  it("GET /auth/api-key/validate returns 401 without API key", async () => {
+    const res = await app.inject({ method: "GET", url: "/auth/api-key/validate" });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("GET /auth/api-key/validate returns 200 with valid API key", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/auth/api-key/validate",
+      headers: { authorization: "Bearer test-api-key" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ valid: boolean }>().valid).toBe(true);
+  });
+
   it("GET /auth/qbo/status returns 401 without API key", async () => {
     const res = await app.inject({ method: "GET", url: "/auth/qbo/status" });
     expect(res.statusCode).toBe(401);

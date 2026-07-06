@@ -4,7 +4,7 @@ import { SyncLinks } from './pages/SyncLinks'
 import { Conflicts } from './pages/Conflicts'
 import { Mappings } from './pages/Mappings'
 import { AuthStatus } from './pages/AuthStatus'
-import { getAuthStatus } from './lib/api'
+import { validateApiKey } from './lib/api'
 
 type Tab = 'invoices' | 'synclinks' | 'conflicts' | 'mappings' | 'auth'
 
@@ -182,7 +182,7 @@ export default function App() {
       }
 
       try {
-        await getAuthStatus(stored)
+        await validateApiKey(stored)
         setApiKeyStatus('valid')
       } catch {
         localStorage.removeItem('apiKey')
@@ -200,7 +200,7 @@ export default function App() {
   }, [])
 
   async function handleApiKeySaved(apiKey: string) {
-    await getAuthStatus(apiKey)
+    await validateApiKey(apiKey)
     localStorage.setItem('apiKey', apiKey)
     setApiKeyStatus('valid')
   }

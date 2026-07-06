@@ -53,6 +53,10 @@ export function getAuthStatus(apiKey?: string) {
   return req<{ valid: boolean; expiresAt: string; refreshTokenExpiresAt: string; refreshTokenExpiringSoon: boolean }>('GET', '/auth/qbo/status', undefined, apiKey)
 }
 
+export function validateApiKey(apiKey?: string) {
+  return req<{ valid: true }>('GET', '/auth/api-key/validate', undefined, apiKey)
+}
+
 export function getInvoices(apiKey?: string) {
   return req<Invoice[]>('GET', '/invoices', undefined, apiKey)
 }

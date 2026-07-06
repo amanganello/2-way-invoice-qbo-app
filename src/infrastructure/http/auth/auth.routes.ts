@@ -25,6 +25,10 @@ export type AuthRouteDeps = {
 export async function registerProtectedAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps = {}): Promise<void> {
   const oauthStateStore = deps.oauthStateStore ?? new RedisOAuthStateStore();
 
+  app.get("/auth/api-key/validate", async (_request: FastifyRequest, reply: FastifyReply) => {
+    return reply.status(200).send({ valid: true });
+  });
+
   app.get("/auth/qbo/status", async (_request: FastifyRequest, reply: FastifyReply) => {
     const creds = await qboCredentialsRepository.get();
 
