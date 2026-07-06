@@ -4,8 +4,4 @@ dockerfilePath = "Dockerfile"
 
 [[services]]
 name = "web"
-startCommand = "node dist/server.js"
-
-[[services]]
-name = "worker"
-startCommand = "node dist/worker.js"
+startCommand = "pnpm prisma migrate deploy && node dist/server.js"

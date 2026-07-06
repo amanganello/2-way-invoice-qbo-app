@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { usePolling } from '../lib/usePolling'
-import { getAuthStatus } from '../lib/api'
+import { getAuthStatus, importMappings } from '../lib/api'
 import { Spinner } from '../components/Spinner'
 import { ErrorBanner } from '../components/ErrorBanner'
 
@@ -16,6 +16,19 @@ export function AuthStatus() {
     if (auth === 'success') {
       setToast({ type: 'success', message: 'QBO reconnected successfully.' })
       refresh()
+      void importMappings()
+        .then(result => {
+          setToast({
+            type: 'success',
+            message: `QBO connected. Imported ${result.accountsImported} accounts, ${result.itemsImported} items, and ${result.customersImported} customers.`,
+          })
+        })
+        .catch(err => {
+          setToast({
+            type: 'error',
+            message: `QBO connected, but mapping import failed: ${err instanceof Error ? err.message : String(err)}`,
+          })
+        })
     } else if (auth === 'error') {
       const msg = params.get('message') ?? 'OAuth failed'
       setToast({ type: 'error', message: `QBO reconnect failed: ${msg}` })
