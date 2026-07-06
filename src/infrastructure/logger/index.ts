@@ -1,10 +1,23 @@
 import pino from "pino";
+import { createRequire } from "node:module";
 import { env } from "@/config/env.js";
 
 const isDevelopment = env.NODE_ENV === "development";
+const require = createRequire(import.meta.url);
+
+function canResolvePackage(packageName: string): boolean {
+  try {
+    require.resolve(packageName);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const usePrettyTransport = isDevelopment && canResolvePackage("pino-pretty");
 
 const logger = pino(
-  isDevelopment
+  usePrettyTransport
     ? {
         level: "debug",
         transport: {
