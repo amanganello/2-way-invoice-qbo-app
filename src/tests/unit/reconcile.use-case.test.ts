@@ -79,6 +79,7 @@ function makeDeps(overrides: Partial<Parameters<typeof reconcileInvoice>[1]> = {
       voidInvoice: vi.fn(async () => makeQBOResult()),
       getInvoice: vi.fn(async () => makeQBOResult()),
       findByDocNumber: vi.fn(async () => null),
+      listInvoices: vi.fn(async () => []),
     } as QBOInvoicePort,
     auditLogRepo: { create: vi.fn(async () => {}), findBySyncLinkId: vi.fn(async () => []) },
     qbDefaultCustomerId: undefined,
