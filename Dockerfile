@@ -1,7 +1,7 @@
 FROM node:24-alpine AS base
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
 
 # Install dependencies
 FROM base AS deps
@@ -25,14 +25,13 @@ RUN pnpm prisma generate
 FROM node:24-alpine AS production
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
 
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/client/dist ./client/dist
-COPY --from=build /app/node_modules/.pnpm/@prisma+client*/node_modules/@prisma/client/runtime ./node_modules/@prisma/client/runtime
 COPY prisma ./prisma
 RUN pnpm prisma generate
 
