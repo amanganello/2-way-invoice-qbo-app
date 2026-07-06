@@ -231,6 +231,50 @@ describe("QboInvoiceSyncExecutor", () => {
 });
 
 describe("SyncLinkStateMachine", () => {
+  it("creates and locks a PENDING SyncLink when none exists yet", async () => {
+    const created = makeSyncLink({
+      qboId: null,
+      qboSyncToken: null,
+      syncStatus: "PENDING",
+      version: 0,
+      lastSyncedAt: null,
+    });
+    const locked = makeSyncLink({
+      ...created,
+      syncStatus: "PROCESSING",
+      version: 1,
+    });
+    const repo = {
+      findByInternalId: vi.fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(locked),
+      findByQboId: vi.fn(async () => null),
+      findById: vi.fn(async () => null),
+      list: vi.fn(async () => []),
+      listConflicts: vi.fn(async () => []),
+      create: vi.fn(async () => created),
+      setProcessing: vi.fn(async () => true),
+      setStatus: vi.fn(async () => makeSyncLink()),
+      upsertLinked: vi.fn(async () => makeSyncLink()),
+      findByStatuses: vi.fn(async () => []),
+      findStuckProcessing: vi.fn(async () => []),
+      findUnsynced: vi.fn(async () => []),
+      findInvoicesWithoutSyncLink: vi.fn(async () => []),
+    } satisfies SyncLinkPort;
+    const state = new SyncLinkStateMachine(repo);
+
+    await expect(state.acquireProcessing("inv-1")).resolves.toEqual({
+      acquired: true,
+      syncLink: locked,
+    });
+    expect(repo.create).toHaveBeenCalledWith({
+      internalId: "inv-1",
+      internalUpdatedAt: expect.any(Date),
+      syncStatus: "PENDING",
+    });
+    expect(repo.setProcessing).toHaveBeenCalledWith("sl-1", 0);
+  });
+
   it("returns acquired false when optimistic lock is not obtained", async () => {
     const state = new SyncLinkStateMachine({
       findByInternalId: vi.fn(async () => makeSyncLink()),

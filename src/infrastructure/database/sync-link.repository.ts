@@ -1,5 +1,5 @@
 import { prisma } from "./prisma.js";
-import type { SyncStatus } from "@prisma/client";
+import { Prisma, type SyncStatus } from "@prisma/client";
 import { ConflictError } from "@/shared/errors/app-error.js";
 import type { AuditLogRecord, SyncLinkPort, SyncLinkRecord } from "@/application/ports/sync.ports.js";
 
@@ -60,14 +60,22 @@ export const syncLinkRepository: SyncLinkPort = {
     internalUpdatedAt: Date;
     syncStatus?: SyncLinkRecord["syncStatus"];
   }): Promise<SyncLinkRecord> {
-    const row = await prisma.syncLink.create({
-      data: {
-        internalId: data.internalId,
-        internalUpdatedAt: data.internalUpdatedAt,
-        syncStatus: data.syncStatus ?? "PENDING",
-      },
-    });
-    return toDomain(row);
+    try {
+      const row = await prisma.syncLink.create({
+        data: {
+          internalId: data.internalId,
+          internalUpdatedAt: data.internalUpdatedAt,
+          syncStatus: data.syncStatus ?? "PENDING",
+        },
+      });
+      return toDomain(row);
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        const existing = await prisma.syncLink.findUnique({ where: { internalId: data.internalId } });
+        if (existing) return toDomain(existing);
+      }
+      throw err;
+    }
   },
 
   async setProcessing(id: string, version: number): Promise<boolean> {
@@ -118,32 +126,50 @@ export const syncLinkRepository: SyncLinkPort = {
   ): Promise<SyncLinkRecord> {
     const existing = await prisma.syncLink.findUnique({ where: { internalId } });
     if (existing) {
-      const result = await prisma.syncLink.updateMany({
-        where: { id: existing.id, version },
-        data: {
-          qboId, qboSyncToken, qboUpdatedAt,
-          lastSyncedSnapshot: JSON.parse(JSON.stringify(snapshot)),
-          lastSyncedAt: new Date(),
-          syncStatus: "SYNCED",
-          version: { increment: 1 },
-        },
-      });
-      if (result.count === 0) {
-        throw new ConflictError("Optimistic lock conflict on SyncLink in upsertLinked");
+      try {
+        const result = await prisma.syncLink.updateMany({
+          where: { id: existing.id, version },
+          data: {
+            qboId, qboSyncToken, qboUpdatedAt,
+            lastSyncedSnapshot: JSON.parse(JSON.stringify(snapshot)),
+            lastSyncedAt: new Date(),
+            syncStatus: "SYNCED",
+            version: { increment: 1 },
+          },
+        });
+        if (result.count === 0) {
+          throw new ConflictError("Optimistic lock conflict on SyncLink in upsertLinked");
+        }
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+          const existingByQboId = await prisma.syncLink.findUnique({ where: { qboId } });
+          if (existingByQboId) return toDomain(existingByQboId);
+        }
+        throw err;
       }
       const updated = await prisma.syncLink.findUnique({ where: { id: existing.id } });
       return toDomain(updated!);
     }
-    const created = await prisma.syncLink.create({
-      data: {
-        internalId, qboId, qboSyncToken, qboUpdatedAt,
-        internalUpdatedAt: new Date(),
-        lastSyncedSnapshot: JSON.parse(JSON.stringify(snapshot)),
-        lastSyncedAt: new Date(),
-        syncStatus: "SYNCED",
-      },
-    });
-    return toDomain(created);
+    try {
+      const created = await prisma.syncLink.create({
+        data: {
+          internalId, qboId, qboSyncToken, qboUpdatedAt,
+          internalUpdatedAt: new Date(),
+          lastSyncedSnapshot: JSON.parse(JSON.stringify(snapshot)),
+          lastSyncedAt: new Date(),
+          syncStatus: "SYNCED",
+        },
+      });
+      return toDomain(created);
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        const existingByQboId = await prisma.syncLink.findUnique({ where: { qboId } });
+        if (existingByQboId) return toDomain(existingByQboId);
+        const existingByInternalId = await prisma.syncLink.findUnique({ where: { internalId } });
+        if (existingByInternalId) return toDomain(existingByInternalId);
+      }
+      throw err;
+    }
   },
 
   async findByStatuses(statuses: SyncLinkRecord["syncStatus"][]): Promise<SyncLinkRecord[]> {
@@ -173,7 +199,10 @@ export const syncLinkRepository: SyncLinkPort = {
 
   async findInvoicesWithoutSyncLink(limit = 500): Promise<Array<{ internalId: string; internalUpdatedAt: Date }>> {
     const invoices = await prisma.invoice.findMany({
-      where: { syncLink: { is: null } },
+      where: {
+        syncLink: { is: null },
+        id: { not: { startsWith: "qbo-" } },
+      },
       select: { id: true, updatedAt: true },
       orderBy: { createdAt: "asc" },
       take: limit,

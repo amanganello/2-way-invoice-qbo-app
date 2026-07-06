@@ -9,15 +9,26 @@ export class SyncLinkStateMachine {
   constructor(private readonly syncLinkRepo: SyncLinkPort) {}
 
   async acquireProcessing(internalId: string): Promise<SyncLinkLock> {
-    const syncLink = await this.syncLinkRepo.findByInternalId(internalId);
-    if (!syncLink) return { acquired: true, syncLink: null };
+    let syncLink = await this.syncLinkRepo.findByInternalId(internalId);
+    if (!syncLink) {
+      syncLink = await this.syncLinkRepo.create({
+        internalId,
+        internalUpdatedAt: new Date(),
+        syncStatus: "PENDING",
+      });
+    }
 
     const locked = await this.syncLinkRepo.setProcessing(syncLink.id, syncLink.version);
     if (!locked) return { acquired: false };
 
     return {
       acquired: true,
-      syncLink: await this.syncLinkRepo.findByInternalId(internalId),
+      syncLink: await this.syncLinkRepo.findByInternalId(internalId) ?? {
+        ...syncLink,
+        syncStatus: "PROCESSING",
+        version: syncLink.version + 1,
+        updatedAt: new Date(),
+      },
     };
   }
 

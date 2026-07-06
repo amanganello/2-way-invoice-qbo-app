@@ -21,32 +21,21 @@ export async function pullInvoice(
 
   const syncLink = await syncLinkRepo.findByQboId(qboId);
   if (!syncLink) {
-    // Invoice was created directly in QBO — no internal record exists yet.
-    // Void/Delete events with no internal counterpart are a no-op.
     if (eventType === "Void" || eventType === "Delete") {
       logger.info({ qboId }, "pullInvoice: void/delete for unknown qboId, skipping");
       return;
     }
-    const qboResult = await qboInvoicePort.getInvoice(qboId);
-    const internalId = crypto.randomUUID();
-    const now = new Date();
-    await invoiceRepo.save({ ...qboResult.invoice, id: internalId, createdAt: now, updatedAt: now });
-    await syncLinkRepo.upsertLinked(
-      internalId,
-      qboId,
-      qboResult.qboSyncToken,
-      qboResult.qboUpdatedAt,
-      invoiceToSnapshot(qboResult.invoice),
-      0
-    );
+
     await auditLogRepo.create({
-      syncLinkId: undefined,
-      action: "invoice_created_from_qbo",
+      action: "skipped_unknown_qbo_invoice",
       sourceEventId,
       result: "SUCCESS",
-      afterState: invoiceToSnapshot(qboResult.invoice),
+      afterState: { qboId, eventType },
     });
-    logger.info({ qboId, internalId }, "pullInvoice: created internal invoice from QBO");
+    logger.info(
+      { qboId, eventType },
+      "pullInvoice: update for unknown qboId, skipping QBO-to-internal import"
+    );
     return;
   }
 

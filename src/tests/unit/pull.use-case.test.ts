@@ -152,13 +152,18 @@ describe("pullInvoice", () => {
     expect(deps.invoiceRepo.save).not.toHaveBeenCalled();
   });
 
-  it("creates internal invoice when no SyncLink exists for a QBO-originated invoice", async () => {
+  it("skips update event when no SyncLink exists for qboId", async () => {
     const deps = makeDeps();
     (deps.syncLinkRepo.findByQboId as ReturnType<typeof vi.fn>).mockResolvedValue(null);
-    (deps.qboInvoicePort.getInvoice as ReturnType<typeof vi.fn>).mockResolvedValue(makeQBOResult());
+
     await pullInvoice("qbo-1", "Update", "evt-1", deps);
-    expect(deps.invoiceRepo.save).toHaveBeenCalledOnce();
-    expect(deps.syncLinkRepo.upsertLinked).toHaveBeenCalledOnce();
+
+    expect(deps.qboInvoicePort.getInvoice).not.toHaveBeenCalled();
+    expect(deps.invoiceRepo.save).not.toHaveBeenCalled();
+    expect(deps.syncLinkRepo.upsertLinked).not.toHaveBeenCalled();
+    expect(deps.auditLogRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "skipped_unknown_qbo_invoice", result: "SUCCESS" })
+    );
   });
 
   it("skips void event when no SyncLink exists for qboId", async () => {

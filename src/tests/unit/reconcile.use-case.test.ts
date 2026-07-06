@@ -88,10 +88,33 @@ function makeDeps(overrides: Partial<Parameters<typeof reconcileInvoice>[1]> = {
   return deps;
 }
 
+function makeNewInvoiceSyncLinkRepo() {
+  const created = makeSyncLink({
+    qboId: null,
+    qboSyncToken: null,
+    qboUpdatedAt: null,
+    syncStatus: "PENDING",
+    lastSyncedAt: null,
+    version: 0,
+  });
+  const locked = makeSyncLink({
+    ...created,
+    syncStatus: "PROCESSING",
+    version: 1,
+  });
+  return {
+    ...makeDeps().syncLinkRepo,
+    findByInternalId: vi.fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue(locked),
+    create: vi.fn(async () => created),
+  };
+}
+
 describe("reconcileInvoice", () => {
   it("calls createInvoice when no SyncLink exists", async () => {
     const deps = makeDeps({
-      syncLinkRepo: { ...makeDeps().syncLinkRepo, findByInternalId: vi.fn(async () => null) },
+      syncLinkRepo: makeNewInvoiceSyncLinkRepo(),
     });
     await reconcileInvoice("inv-1", deps);
     expect(deps.qboInvoicePort.createInvoice).toHaveBeenCalledOnce();
@@ -115,7 +138,7 @@ describe("reconcileInvoice", () => {
   it("no-ops when invoice is void and no SyncLink exists, writes AuditLog", async () => {
     const deps = makeDeps({
       invoiceRepo: { ...makeDeps().invoiceRepo, findById: vi.fn(async () => makeInvoice({ status: "void" })) },
-      syncLinkRepo: { ...makeDeps().syncLinkRepo, findByInternalId: vi.fn(async () => null) },
+      syncLinkRepo: makeNewInvoiceSyncLinkRepo(),
     });
     await reconcileInvoice("inv-1", deps);
     expect(deps.qboInvoicePort.voidInvoice).not.toHaveBeenCalled();
@@ -135,7 +158,7 @@ describe("reconcileInvoice", () => {
 
   it("throws ExternalServiceError when customer not in CustomerMap and no fallback", async () => {
     const deps = makeDeps({
-      syncLinkRepo: { ...makeDeps().syncLinkRepo, findByInternalId: vi.fn(async () => null) },
+      syncLinkRepo: makeNewInvoiceSyncLinkRepo(),
       customerMapRepo: { ...makeDeps().customerMapRepo, findByInternalId: vi.fn(async () => null) },
       qbDefaultCustomerId: undefined,
       qbEnvironment: "production",
@@ -145,7 +168,7 @@ describe("reconcileInvoice", () => {
 
   it("uses QB_DEFAULT_CUSTOMER_ID fallback in sandbox when no CustomerMap entry", async () => {
     const deps = makeDeps({
-      syncLinkRepo: { ...makeDeps().syncLinkRepo, findByInternalId: vi.fn(async () => null) },
+      syncLinkRepo: makeNewInvoiceSyncLinkRepo(),
       customerMapRepo: { ...makeDeps().customerMapRepo, findByInternalId: vi.fn(async () => null) },
       qbDefaultCustomerId: "DEFAULT-CUST",
       qbEnvironment: "sandbox",
@@ -206,7 +229,7 @@ describe("reconcileInvoice", () => {
   it("links existing QBO invoice on duplicate create error (timeout-after-write recovery)", async () => {
     const existingResult = makeQBOResult({ qboId: "qbo-existing", qboSyncToken: "2" });
     const deps = makeDeps({
-      syncLinkRepo: { ...makeDeps().syncLinkRepo, findByInternalId: vi.fn(async () => null) },
+      syncLinkRepo: makeNewInvoiceSyncLinkRepo(),
       qboInvoicePort: {
         ...makeDeps().qboInvoicePort,
         createInvoice: vi.fn(async () => { throw new QboDuplicateDocumentError("Duplicate Document Number Error, 6240"); }),
@@ -217,7 +240,7 @@ describe("reconcileInvoice", () => {
     // docNumber = internalId stripped of dashes, truncated to 20 chars → "inv1"
     expect(deps.qboInvoicePort.findByDocNumber).toHaveBeenCalledWith("inv1");
     expect(deps.syncLinkRepo.upsertLinked).toHaveBeenCalledWith(
-      "inv-1", "qbo-existing", "2", expect.any(Date), expect.any(Object), 0
+      "inv-1", "qbo-existing", "2", expect.any(Date), expect.any(Object), 1
     );
     expect(deps.auditLogRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({ action: "invoice_created_in_qbo", result: "SUCCESS" })
