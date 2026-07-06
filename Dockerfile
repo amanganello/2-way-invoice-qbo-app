@@ -1,6 +1,7 @@
 FROM node:24-alpine AS base
 WORKDIR /app
 
+RUN apk add --no-cache openssl
 RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
 
 # Install dependencies

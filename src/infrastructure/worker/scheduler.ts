@@ -9,7 +9,11 @@ export function startScheduler(): { stop: () => void } {
 
   const task = cron.schedule(cronExpression, async () => {
     logger.info("Scheduler: triggering reconciliation job");
-    await reconciliationQueue.add("reconciliation", {}, { jobId: "reconciliation" });
+    try {
+      await reconciliationQueue.add("reconciliation", {}, { jobId: "reconciliation" });
+    } catch (err) {
+      logger.error({ err }, "Scheduler: failed to enqueue reconciliation job");
+    }
   });
 
   logger.info({ intervalMinutes }, "Scheduler started");

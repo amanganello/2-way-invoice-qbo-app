@@ -37,6 +37,9 @@ export function startWorkers(): { workers: Worker[]; stop: () => Promise<void> }
   const workers = [invoiceSyncWorker, paymentSyncWorker, reconciliationWorker];
 
   for (const worker of workers) {
+    worker.on("error", err => {
+      logger.error({ err }, "Worker runtime error");
+    });
     worker.on("failed", (job, err) => {
       logger.error({ jobId: job?.id, jobName: job?.name, err }, "Job failed");
     });
