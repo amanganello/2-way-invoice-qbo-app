@@ -8,6 +8,21 @@ export function AuthStatus() {
   const { data, error, loading, refresh } = usePolling(getAuthStatus, 30000)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
+  async function runPostAuthBootstrap() {
+    try {
+      const mappings = await importMappings()
+      setToast({
+        type: 'success',
+        message: `QBO connected. Imported ${mappings.accountsImported} accounts, ${mappings.itemsImported} items, and ${mappings.customersImported} customers.`,
+      })
+    } catch (err) {
+      setToast({
+        type: 'error',
+        message: `QBO connected, but bootstrap failed: ${err instanceof Error ? err.message : String(err)}`,
+      })
+    }
+  }
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const auth = params.get('auth')
@@ -16,19 +31,7 @@ export function AuthStatus() {
     if (auth === 'success') {
       setToast({ type: 'success', message: 'QBO reconnected successfully.' })
       refresh()
-      void importMappings()
-        .then(result => {
-          setToast({
-            type: 'success',
-            message: `QBO connected. Imported ${result.accountsImported} accounts, ${result.itemsImported} items, and ${result.customersImported} customers.`,
-          })
-        })
-        .catch(err => {
-          setToast({
-            type: 'error',
-            message: `QBO connected, but mapping import failed: ${err instanceof Error ? err.message : String(err)}`,
-          })
-        })
+      void runPostAuthBootstrap()
     } else if (auth === 'error') {
       const msg = params.get('message') ?? 'OAuth failed'
       setToast({ type: 'error', message: `QBO reconnect failed: ${msg}` })

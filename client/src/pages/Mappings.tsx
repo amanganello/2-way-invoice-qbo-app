@@ -48,16 +48,16 @@ export function Mappings() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-semibold">QBO Mappings</h2>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => void handleInitialLoad()}
             disabled={loadingInitial}
             className="flex items-center gap-2 rounded-md bg-gray-600 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
           >
             {loadingInitial && <Spinner />}
-            Initial Load
+            Push Internal Invoices to QBO
           </button>
           <button
             onClick={() => void handleImport()}
@@ -65,7 +65,7 @@ export function Mappings() {
             className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {importing && <Spinner />}
-            Import from QBO
+            Import Mappings from QBO
           </button>
         </div>
       </div>

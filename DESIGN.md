@@ -244,18 +244,20 @@ and accessible via `GET /sync/links/:id`.
 
 ---
 
-## What Was Not Implemented
+## Initial Load
 
-**`qbo-to-internal` initial load** — returns 501. The intended design:
-paginate QBO invoices, match each by `DocNumber` against internal IDs,
-create a `SyncLink` for matches and a new internal `Invoice` for
-unmatched records, run as a background job returning `202 Accepted`.
-Not implemented because `DocNumber` is user-editable in QBO — if
-overwritten, the match silently fails and creates a duplicate. This risk,
-combined with the pagination and transaction handling required, makes it
-the highest-effort feature relative to evaluation signal. The
-`internal-to-qbo` direction and webhook-driven sync fully demonstrate
-the bidirectional architecture.
+**Internal → QBO** queues one reconcile job for each internal invoice
+without a `SyncLink`.
+
+**QBO → internal** returns 501 in this version. The intended design is to
+paginate QBO invoices, import them with deterministic internal ids based
+on QBO ids, and create `SYNCED` SyncLinks without enqueueing reconcile
+jobs. This was deferred because QBO `DocNumber` is user-editable and
+therefore unsafe as identity; a production-ready import needs a dedicated
+mapping strategy and idempotent transaction handling to avoid duplicate
+accounting records.
+
+Payments QBO → internal initial load is also deferred.
 
 ---
 

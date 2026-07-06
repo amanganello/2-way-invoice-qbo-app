@@ -140,8 +140,11 @@ for a full walkthrough of each tab and what you can test there.
 
 ### 8. Import QBO mappings
 
-With the service running, pull accounts, items, and customers from your
-QBO sandbox:
+After browser OAuth succeeds, the frontend Auth tab automatically imports
+QBO accounts, items, and customers.
+
+You can also retry this manually from the Mappings tab. To pull accounts,
+items, and customers from your QBO sandbox:
 
 ```bash
 curl -X POST http://localhost:3000/sync/mappings/import \
@@ -324,8 +327,8 @@ tradeoff reasoning.
 4. Set `REDIS_URL` to an external Redis URL, such as Upstash/Redis Cloud. BullMQ requires a `redis://` or `rediss://` URL, not an HTTP REST URL.
 5. Set env vars (QB_CLIENT_ID, QB_CLIENT_SECRET, QB_REALM_ID, QB_WEBHOOK_VERIFIER_TOKEN, QB_REDIRECT_URI, TOKEN_ENCRYPTION_KEY, API_KEY, QB_ENVIRONMENT=sandbox).
 6. For a single-service demo deploy, set `RUN_WORKERS_IN_WEB=true` so BullMQ workers run inside the web process. For production, prefer a separate worker process and leave it `false`.
-7. Configure the deploy/pre-deploy command to run `pnpm migrate`.
-8. Set `QB_REDIRECT_URI=https://<web>.railway.app/auth/qbo/callback` and `FRONTEND_URL=https://<web>.railway.app` in Railway env vars, then open the app's Auth tab and click **Reconnect QBO** to complete the OAuth flow in the browser — no terminal access required.
+7. The Railway start command runs `pnpm migrate` before starting the server.
+8. Set `QB_REDIRECT_URI=https://<web>.railway.app/auth/qbo/callback` and `FRONTEND_URL=https://<web>.railway.app` in Railway env vars, then open the app's Auth tab and click **Reconnect QBO** to complete the OAuth flow in the browser. On success, the frontend imports QBO mappings automatically.
 9. Set QBO webhook endpoint to `https://<web-service>.railway.app/webhooks/qbo`.
 
 ---
