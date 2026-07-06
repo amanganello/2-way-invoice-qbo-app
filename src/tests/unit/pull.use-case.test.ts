@@ -152,11 +152,21 @@ describe("pullInvoice", () => {
     expect(deps.invoiceRepo.save).not.toHaveBeenCalled();
   });
 
-  it("exits silently when no SyncLink found for qboId", async () => {
+  it("creates internal invoice when no SyncLink exists for a QBO-originated invoice", async () => {
     const deps = makeDeps();
     (deps.syncLinkRepo.findByQboId as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (deps.qboInvoicePort.getInvoice as ReturnType<typeof vi.fn>).mockResolvedValue(makeQBOResult());
     await pullInvoice("qbo-1", "Update", "evt-1", deps);
+    expect(deps.invoiceRepo.save).toHaveBeenCalledOnce();
+    expect(deps.syncLinkRepo.upsertLinked).toHaveBeenCalledOnce();
+  });
+
+  it("skips void event when no SyncLink exists for qboId", async () => {
+    const deps = makeDeps();
+    (deps.syncLinkRepo.findByQboId as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    await pullInvoice("qbo-1", "Void", "evt-1", deps);
     expect(deps.invoiceRepo.save).not.toHaveBeenCalled();
+    expect(deps.syncLinkRepo.upsertLinked).not.toHaveBeenCalled();
   });
 
   it("does not false-conflict when snapshot has numeric amounts (legacy format)", async () => {
