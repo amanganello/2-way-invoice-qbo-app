@@ -4,6 +4,7 @@ import { SyncLinks } from './pages/SyncLinks'
 import { Conflicts } from './pages/Conflicts'
 import { Mappings } from './pages/Mappings'
 import { AuthStatus } from './pages/AuthStatus'
+import { getAuthStatus } from './lib/api'
 
 type Tab = 'invoices' | 'synclinks' | 'conflicts' | 'mappings' | 'auth'
 
@@ -113,15 +114,24 @@ function SettingsDrawer({
   )
 }
 
-function ApiKeyPrompt({ onSaved }: { onSaved: () => void }) {
+function ApiKeyPrompt({ onSaved }: { onSaved: (apiKey: string) => Promise<void> }) {
   const [value, setValue] = useState('')
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const trimmed = value.trim()
     if (!trimmed) return
-    localStorage.setItem('apiKey', trimmed)
-    onSaved()
+    setSaving(true)
+    setError('')
+    try {
+      await onSaved(trimmed)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid API key')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -140,12 +150,17 @@ function ApiKeyPrompt({ onSaved }: { onSaved: () => void }) {
             className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             autoFocus
           />
+          {error && (
+            <p className="text-sm text-red-700">
+              {error}
+            </p>
+          )}
           <button
             type="submit"
-            disabled={!value.trim()}
+            disabled={!value.trim() || saving}
             className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            Save &amp; Continue
+            {saving ? 'Checking...' : 'Save & Continue'}
           </button>
         </form>
       </div>
@@ -156,23 +171,59 @@ function ApiKeyPrompt({ onSaved }: { onSaved: () => void }) {
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('invoices')
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [hasApiKey, setHasApiKey] = useState(() => Boolean(localStorage.getItem('apiKey')))
+  const [apiKeyStatus, setApiKeyStatus] = useState<'checking' | 'missing' | 'valid'>('checking')
 
   useEffect(() => {
-    function onKeyChanged() {
-      setHasApiKey(Boolean(localStorage.getItem('apiKey')))
+    async function validateStoredApiKey() {
+      const stored = localStorage.getItem('apiKey')?.trim()
+      if (!stored) {
+        setApiKeyStatus('missing')
+        return
+      }
+
+      try {
+        await getAuthStatus(stored)
+        setApiKeyStatus('valid')
+      } catch {
+        localStorage.removeItem('apiKey')
+        setApiKeyStatus('missing')
+      }
     }
+
+    function onKeyChanged() {
+      void validateStoredApiKey()
+    }
+
+    void validateStoredApiKey()
     window.addEventListener('apikey-changed', onKeyChanged)
     return () => window.removeEventListener('apikey-changed', onKeyChanged)
   }, [])
 
-  function handleApiKeySaved() {
-    setHasApiKey(Boolean(localStorage.getItem('apiKey')))
+  async function handleApiKeySaved(apiKey: string) {
+    await getAuthStatus(apiKey)
+    localStorage.setItem('apiKey', apiKey)
+    setApiKeyStatus('valid')
   }
 
   function handleDrawerClose() {
     setDrawerOpen(false)
-    setHasApiKey(Boolean(localStorage.getItem('apiKey')))
+    window.dispatchEvent(new Event('apikey-changed'))
+  }
+
+  if (apiKeyStatus === 'checking') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="text-sm text-gray-600">Checking API key...</div>
+      </div>
+    )
+  }
+
+  if (apiKeyStatus === 'missing') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <ApiKeyPrompt onSaved={handleApiKeySaved} />
+      </div>
+    )
   }
 
   return (
@@ -211,17 +262,11 @@ export default function App() {
 
       {/* Page content */}
       <main className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full">
-        {!hasApiKey ? (
-          <ApiKeyPrompt onSaved={handleApiKeySaved} />
-        ) : (
-          <>
-            {activeTab === 'invoices' && <Invoices />}
-            {activeTab === 'synclinks' && <SyncLinks />}
-            {activeTab === 'conflicts' && <Conflicts />}
-            {activeTab === 'mappings' && <Mappings />}
-            {activeTab === 'auth' && <AuthStatus />}
-          </>
-        )}
+        {activeTab === 'invoices' && <Invoices />}
+        {activeTab === 'synclinks' && <SyncLinks />}
+        {activeTab === 'conflicts' && <Conflicts />}
+        {activeTab === 'mappings' && <Mappings />}
+        {activeTab === 'auth' && <AuthStatus />}
       </main>
 
       <SettingsDrawer open={drawerOpen} onClose={handleDrawerClose} />
