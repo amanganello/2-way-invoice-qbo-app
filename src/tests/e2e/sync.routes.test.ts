@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
-import { buildApp } from "../../app.js";
+import { buildApp } from "@/app.js";
 
 const AUTH = { authorization: "Bearer test-api-key" };
 
@@ -42,7 +42,7 @@ describe("Sync routes", () => {
     vi.doMock("@/infrastructure/queue/queues", () => ({ invoiceSyncQueue: mockInvoiceSyncQueue, syncQueue: mockSyncQueue }));
     vi.doMock("@/infrastructure/queue/redis", () => ({ redisConnection: { ping: vi.fn(async () => "PONG") } }));
 
-    const { registerRoutes } = await import("../../infrastructure/http/routes.js");
+    const { registerRoutes } = await import("@/infrastructure/http/routes.js");
     app = buildApp();
     await registerRoutes(app);
     await app.ready();

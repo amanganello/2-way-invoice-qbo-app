@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { encrypt, decrypt } from "../../shared/crypto/encryption.js";
+import { encrypt, decrypt } from "@/shared/crypto/encryption.js";
 
 const KEY = "a".repeat(64); // 32-byte hex
 

@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
-import { syncPayment, type PaymentSyncDeps } from "../../application/sync/payment-sync.use-case.js";
-import { QboDuplicateDocumentError } from "../../application/sync/qbo-sync-errors.js";
-import type { Invoice, Payment } from "../../domain/invoices/invoice.types.js";
+import { syncPayment, type PaymentSyncDeps } from "@/application/sync/payment-sync.use-case.js";
+import { QboDuplicateDocumentError } from "@/application/sync/qbo-sync-errors.js";
+import { toCurrencyCode, toMoney, type Invoice, type Payment } from "@/domain/invoices/invoice.types.js";
 
 function makePayment(overrides: Partial<Payment> = {}): Payment {
-  return { id: "pay-1", invoiceId: "inv-1", amount: "100.00", currency: "USD", paidAt: new Date(), ...overrides };
+  return { id: "pay-1", invoiceId: "inv-1", amount: toMoney("100.00"), currency: toCurrencyCode("USD"), paidAt: new Date(), ...overrides };
 }
 
 function makeDeps() {
@@ -12,8 +12,8 @@ function makeDeps() {
     id: "inv-1",
     customerId: "cust-1",
     lineItems: [],
-    totalAmount: "100.00",
-    currency: "USD",
+    totalAmount: toMoney("100.00"),
+    currency: toCurrencyCode("USD"),
     status: "sent",
     dueDate: new Date(),
     createdAt: new Date(),

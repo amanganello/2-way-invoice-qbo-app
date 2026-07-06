@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
-import { buildApp } from "../../app.js";
-import { InMemoryOAuthStateStore } from "../../infrastructure/http/auth/oauth-state-store.js";
+import { buildApp } from "@/app.js";
+import { InMemoryOAuthStateStore } from "@/infrastructure/http/auth/oauth-state-store.js";
 
 // Mock intuit-oauth before any imports that use it
 const mockAuthorizeUri = vi.fn(() => "https://appcenter.intuit.com/connect/oauth2?mock=1");
@@ -40,7 +40,7 @@ describe("Auth routes", () => {
     vi.doMock("@/infrastructure/database/qbo-credentials.repository", () => ({
       qboCredentialsRepository: { get: mockCreds, save: mockSave },
     }));
-    const { registerRoutes } = await import("../../infrastructure/http/routes.js");
+    const { registerRoutes } = await import("@/infrastructure/http/routes.js");
     app = buildApp();
     await registerRoutes(app, { auth: { oauthStateStore: new InMemoryOAuthStateStore() } });
     await app.ready();

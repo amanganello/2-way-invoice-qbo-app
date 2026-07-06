@@ -1,21 +1,22 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { setupServer } from "msw/node";
 import { http, HttpResponse } from "msw";
-import { prisma } from "../../infrastructure/database/prisma.js";
-import { syncLinkRepository } from "../../infrastructure/database/sync-link.repository.js";
-import { paymentSyncLinkRepository } from "../../infrastructure/database/payment-sync-link.repository.js";
-import { reconcileInvoice } from "../../application/sync/reconcile.use-case.js";
-import { pullInvoice } from "../../application/sync/pull.use-case.js";
-import { syncPayment } from "../../application/sync/payment-sync.use-case.js";
-import { auditLogRepository } from "../../infrastructure/database/audit-log.repository.js";
-import { encrypt } from "../../shared/crypto/encryption.js";
-import { accountMapRepository } from "../../infrastructure/database/account-map.repository.js";
-import { itemMapRepository } from "../../infrastructure/database/item-map.repository.js";
-import { customerMapRepository } from "../../infrastructure/database/customer-map.repository.js";
-import { PrismaInvoiceRepository } from "../../infrastructure/database/invoice.repository.js";
-import { PrismaPaymentRepository } from "../../infrastructure/database/payment.repository.js";
-import { QBOInvoiceAdapter } from "../../infrastructure/qbo/qbo-invoice.adapter.js";
-import { QBOPaymentAdapter } from "../../infrastructure/qbo/qbo-payment.adapter.js";
+import { prisma } from "@/infrastructure/database/prisma.js";
+import { syncLinkRepository } from "@/infrastructure/database/sync-link.repository.js";
+import { paymentSyncLinkRepository } from "@/infrastructure/database/payment-sync-link.repository.js";
+import { reconcileInvoice } from "@/application/sync/reconcile.use-case.js";
+import { pullInvoice } from "@/application/sync/pull.use-case.js";
+import { syncPayment } from "@/application/sync/payment-sync.use-case.js";
+import { auditLogRepository } from "@/infrastructure/database/audit-log.repository.js";
+import { encrypt } from "@/shared/crypto/encryption.js";
+import { accountMapRepository } from "@/infrastructure/database/account-map.repository.js";
+import { itemMapRepository } from "@/infrastructure/database/item-map.repository.js";
+import { customerMapRepository } from "@/infrastructure/database/customer-map.repository.js";
+import { PrismaInvoiceRepository } from "@/infrastructure/database/invoice.repository.js";
+import { PrismaPaymentRepository } from "@/infrastructure/database/payment.repository.js";
+import { QBOInvoiceAdapter } from "@/infrastructure/qbo/qbo-invoice.adapter.js";
+import { QBOPaymentAdapter } from "@/infrastructure/qbo/qbo-payment.adapter.js";
+import { toCurrencyCode, toMoney } from "@/domain/invoices/invoice.types.js";
 
 const QBO_BASE = "https://sandbox-quickbooks.api.intuit.com/v3/company/test-realm";
 
@@ -153,7 +154,7 @@ describe("Integration: sync round-trips", () => {
   it("internal create → push to QBO → SyncLink created", async () => {
     const invoice = await invoiceRepo.save({
       id: "inv-integration-1", customerId: "cust-1", lineItems: [],
-      totalAmount: "100.00", currency: "USD", status: "sent",
+      totalAmount: toMoney("100.00"), currency: toCurrencyCode("USD"), status: "sent",
       dueDate: new Date("2030-01-01"), createdAt: new Date(), updatedAt: new Date(),
     });
 
@@ -170,13 +171,13 @@ describe("Integration: sync round-trips", () => {
     // Step 1: create and reconcile → SyncLink with SyncToken "0"
     const invoice = await invoiceRepo.save({
       id: "inv-integration-update", customerId: "cust-1", lineItems: [],
-      totalAmount: "100.00", currency: "USD", status: "sent",
+      totalAmount: toMoney("100.00"), currency: toCurrencyCode("USD"), status: "sent",
       dueDate: new Date("2030-01-01"), createdAt: new Date(), updatedAt: new Date(),
     });
     await reconcileInvoice(invoice.id, baseDeps);
 
     // Step 2: mutate the invoice
-    await invoiceRepo.save({ ...invoice, totalAmount: "200.00", updatedAt: new Date() });
+    await invoiceRepo.save({ ...invoice, totalAmount: toMoney("200.00"), updatedAt: new Date() });
 
     // Step 3: reconcile again — SyncLink now exists → update path → ?operation=update
     await reconcileInvoice(invoice.id, baseDeps);
@@ -189,7 +190,7 @@ describe("Integration: sync round-trips", () => {
   it("webhook pull → internal invoice updated", async () => {
     const invoice = await invoiceRepo.save({
       id: "inv-integration-2", customerId: "cust-1", lineItems: [],
-      totalAmount: "100.00", currency: "USD", status: "sent",
+      totalAmount: toMoney("100.00"), currency: toCurrencyCode("USD"), status: "sent",
       dueDate: new Date("2030-01-01"), createdAt: new Date(), updatedAt: new Date(),
     });
     await reconcileInvoice(invoice.id, baseDeps);
@@ -207,7 +208,7 @@ describe("Integration: sync round-trips", () => {
   it("duplicate webhook → second event silently skipped (stale check)", async () => {
     const invoice = await invoiceRepo.save({
       id: "inv-integration-3", customerId: "cust-1", lineItems: [],
-      totalAmount: "100.00", currency: "USD", status: "sent",
+      totalAmount: toMoney("100.00"), currency: toCurrencyCode("USD"), status: "sent",
       dueDate: new Date("2030-01-01"), createdAt: new Date(), updatedAt: new Date(),
     });
     await reconcileInvoice(invoice.id, baseDeps);
@@ -260,7 +261,7 @@ describe("Integration: sync round-trips", () => {
   it("internal void → QBO void called", async () => {
     const invoice = await invoiceRepo.save({
       id: "inv-integration-4", customerId: "cust-1", lineItems: [],
-      totalAmount: "100.00", currency: "USD", status: "sent",
+      totalAmount: toMoney("100.00"), currency: toCurrencyCode("USD"), status: "sent",
       dueDate: new Date("2030-01-01"), createdAt: new Date(), updatedAt: new Date(),
     });
     await reconcileInvoice(invoice.id, baseDeps);
@@ -276,7 +277,7 @@ describe("Integration: sync round-trips", () => {
   it("QBO void webhook → internal invoice status set to void", async () => {
     const invoice = await invoiceRepo.save({
       id: "inv-integration-5", customerId: "cust-1", lineItems: [],
-      totalAmount: "100.00", currency: "USD", status: "sent",
+      totalAmount: toMoney("100.00"), currency: toCurrencyCode("USD"), status: "sent",
       dueDate: new Date("2030-01-01"), createdAt: new Date(), updatedAt: new Date(),
     });
     await reconcileInvoice(invoice.id, baseDeps);
@@ -295,7 +296,7 @@ describe("Integration: sync round-trips", () => {
     // After reconcile, lastSyncedSnapshot.dueDate = "2030-01-01T00:00:00.000Z"
     const invoice = await invoiceRepo.save({
       id: "inv-integration-conflict", customerId: "cust-1", lineItems: [],
-      totalAmount: "100.00", currency: "USD", status: "sent",
+      totalAmount: toMoney("100.00"), currency: toCurrencyCode("USD"), status: "sent",
       dueDate: new Date("2030-01-01"), createdAt: new Date(), updatedAt: new Date(),
     });
     await reconcileInvoice(invoice.id, baseDeps);
@@ -336,14 +337,14 @@ describe("Integration: sync round-trips", () => {
   it("payment sync → PaymentSyncLink created", async () => {
     const invoice = await invoiceRepo.save({
       id: "inv-integration-6", customerId: "cust-1", lineItems: [],
-      totalAmount: "100.00", currency: "USD", status: "sent",
+      totalAmount: toMoney("100.00"), currency: toCurrencyCode("USD"), status: "sent",
       dueDate: new Date("2030-01-01"), createdAt: new Date(), updatedAt: new Date(),
     });
     await reconcileInvoice(invoice.id, baseDeps);
 
     const payment = await paymentRepo.save({
       id: "pay-integration-1", invoiceId: invoice.id,
-      amount: 50, currency: "USD", paidAt: new Date(),
+      amount: toMoney(50), currency: toCurrencyCode("USD"), paidAt: new Date(),
     });
 
     await syncPayment(payment.id, {
@@ -367,7 +368,7 @@ describe("Integration: sync round-trips", () => {
   it("partially paid invoice edit → update blocked", async () => {
     const invoice = await invoiceRepo.save({
       id: "inv-integration-7", customerId: "cust-1", lineItems: [],
-      totalAmount: "100.00", currency: "USD", status: "sent",
+      totalAmount: toMoney("100.00"), currency: toCurrencyCode("USD"), status: "sent",
       dueDate: new Date("2030-01-01"), createdAt: new Date(), updatedAt: new Date(),
     });
     await reconcileInvoice(invoice.id, baseDeps);
@@ -379,7 +380,7 @@ describe("Integration: sync round-trips", () => {
     // Modify lineItems so the guard detects a change against lastSyncedSnapshot
     await invoiceRepo.save({
       ...invoice,
-      lineItems: [{ description: "new item", quantity: 1, unitPrice: "100.00", amount: "100.00" }],
+      lineItems: [{ description: "new item", quantity: 1, unitPrice: toMoney("100.00"), amount: toMoney("100.00") }],
       updatedAt: new Date(),
     });
     // Now try to update — should throw ConflictError

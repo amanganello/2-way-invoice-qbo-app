@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { buildApp } from "../../app.js";
-import { registerRoutes } from "../../infrastructure/http/routes.js";
+import { buildApp } from "@/app.js";
+import { registerRoutes } from "@/infrastructure/http/routes.js";
 import type { FastifyInstance } from "fastify";
 
 describe("GET /health", () => {

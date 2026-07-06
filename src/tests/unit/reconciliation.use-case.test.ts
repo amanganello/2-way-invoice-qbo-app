@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { runReconciliation, type ReconciliationDeps } from "../../application/sync/reconciliation.use-case.js";
-import type { SyncLinkRecord } from "../../application/ports/sync.ports.js";
+import { runReconciliation, type ReconciliationDeps } from "@/application/sync/reconciliation.use-case.js";
+import type { SyncLinkRecord } from "@/application/ports/sync.ports.js";
 
 function makeLink(overrides: Partial<SyncLinkRecord> = {}): SyncLinkRecord {
   return {

@@ -3,7 +3,9 @@
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "types": ["node", "vitest/globals"],
     "noEmit": true
   },
-  "include": ["./**/*", "../**/*"]
+  "include": ["./**/*", "../**/*"],
+  "exclude": ["../../node_modules", "../../dist"]
 }

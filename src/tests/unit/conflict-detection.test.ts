@@ -1,14 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { detectConflicts } from "../../application/sync/conflict-detection.js";
-import type { Invoice } from "../../domain/invoices/invoice.types.js";
+import { detectConflicts } from "@/application/sync/conflict-detection.js";
+import { toCurrencyCode, toMoney, type Invoice } from "@/domain/invoices/invoice.types.js";
 
 function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {
   return {
     id: "inv-1",
     customerId: "cust-1",
-    lineItems: [{ description: "Service", quantity: 1, unitPrice: "100.00", amount: "100.00" }],
-    totalAmount: "100.00",
-    currency: "USD",
+    lineItems: [{ description: "Service", quantity: 1, unitPrice: toMoney("100.00"), amount: toMoney("100.00") }],
+    totalAmount: toMoney("100.00"),
+    currency: toCurrencyCode("USD"),
     status: "sent",
     dueDate: new Date("2030-01-01"),
     createdAt: new Date("2026-01-01"),
@@ -40,7 +40,7 @@ describe("detectConflicts", () => {
 
   it("keeps internal-only change with no conflict (e.g. lineItems updated internally)", () => {
     const snapshot = makeInvoice();
-    const newLine = [{ description: "Updated", quantity: 2, unitPrice: "50.00", amount: "100.00" }];
+    const newLine = [{ description: "Updated", quantity: 2, unitPrice: toMoney("50.00"), amount: toMoney("100.00") }];
     const internal = makeInvoice({ lineItems: newLine });
     const qbo = makeInvoice(); // unchanged
     const result = detectConflicts(snapshot, internal, qbo);
@@ -63,9 +63,9 @@ describe("detectConflicts", () => {
 
   it("auto-resolves lineItems conflict in favour of internal", () => {
     const snapshot = makeInvoice();
-    const newLine = [{ description: "New", quantity: 3, unitPrice: "40.00", amount: "120.00" }];
+    const newLine = [{ description: "New", quantity: 3, unitPrice: toMoney("40.00"), amount: toMoney("120.00") }];
     const internal = makeInvoice({ lineItems: newLine });
-    const qbo = makeInvoice({ lineItems: [{ description: "QBO edit", quantity: 1, unitPrice: "200.00", amount: "200.00" }] });
+    const qbo = makeInvoice({ lineItems: [{ description: "QBO edit", quantity: 1, unitPrice: toMoney("200.00"), amount: toMoney("200.00") }] });
     const result = detectConflicts(snapshot, internal, qbo);
     expect(result.hasConflict).toBe(false);
     if (!result.hasConflict) {

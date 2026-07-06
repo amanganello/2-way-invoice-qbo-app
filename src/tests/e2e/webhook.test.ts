@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { createHmac } from "node:crypto";
-import { buildApp } from "../../app.js";
+import { buildApp } from "@/app.js";
 
 const VERIFIER_TOKEN = "test-webhook-token"; // matches vitest.config.ts QB_WEBHOOK_VERIFIER_TOKEN
 
@@ -31,7 +31,7 @@ describe("POST /webhooks/qbo", () => {
       redisConnection: { ping: vi.fn(async () => "PONG") },
     }));
 
-    const { registerRoutes } = await import("../../infrastructure/http/routes.js");
+    const { registerRoutes } = await import("@/infrastructure/http/routes.js");
     app = buildApp();
     await registerRoutes(app);
     await app.ready();

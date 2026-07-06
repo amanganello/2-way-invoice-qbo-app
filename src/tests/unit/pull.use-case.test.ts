@@ -1,12 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
-import { pullInvoice, type PullDeps } from "../../application/sync/pull.use-case.js";
-import type { Invoice, QBOInvoiceResult } from "../../domain/invoices/invoice.types.js";
-import type { SyncLinkRecord } from "../../application/ports/sync.ports.js";
+import { pullInvoice, type PullDeps } from "@/application/sync/pull.use-case.js";
+import { toCurrencyCode, toMoney, type Invoice, type QBOInvoiceResult } from "@/domain/invoices/invoice.types.js";
+import type { SyncLinkRecord } from "@/application/ports/sync.ports.js";
 
 function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {
   return {
     id: "inv-1", customerId: "cust-1", lineItems: [],
-    totalAmount: "100.00", currency: "USD", status: "sent",
+    totalAmount: toMoney("100.00"), currency: toCurrencyCode("USD"), status: "sent",
     dueDate: new Date("2030-01-01"), createdAt: new Date("2026-01-01"), updatedAt: new Date("2026-01-01"),
     ...overrides,
   };
@@ -174,10 +174,10 @@ describe("pullInvoice", () => {
       })
     );
     (deps.invoiceRepo.findById as ReturnType<typeof vi.fn>).mockResolvedValue(
-      makeInvoice({ totalAmount: "100.00" })
+      makeInvoice({ totalAmount: toMoney("100.00") })
     );
     (deps.qboInvoicePort.getInvoice as ReturnType<typeof vi.fn>).mockResolvedValue(
-      makeQBOResult({ invoice: makeInvoice({ totalAmount: "100.00", status: "paid" }) })
+      makeQBOResult({ invoice: makeInvoice({ totalAmount: toMoney("100.00"), status: "paid" }) })
     );
     await pullInvoice("qbo-1", "Update", "evt-1", deps);
     // Should not call setStatus with CONFLICT

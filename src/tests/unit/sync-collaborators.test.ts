@@ -1,21 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
-import { detectConflicts } from "../../application/sync/conflict-detection.js";
-import { PartialPaymentPolicy } from "../../application/sync/partial-payment-policy.js";
-import { QboInvoiceSyncExecutor } from "../../application/sync/qbo-invoice-sync-executor.js";
-import { QboSyncContextResolver } from "../../application/sync/qbo-sync-context-resolver.js";
-import { QboDuplicateDocumentError, QboStaleObjectError } from "../../application/sync/qbo-sync-errors.js";
-import { SyncLinkStateMachine } from "../../application/sync/sync-link-state-machine.js";
-import { AuditRecorder } from "../../application/sync/audit-recorder.js";
-import type { Invoice, QBOInvoicePort, QBOInvoiceResult } from "../../domain/invoices/invoice.types.js";
-import type { SyncLinkRecord, SyncLinkPort } from "../../application/ports/sync.ports.js";
+import { detectConflicts } from "@/application/sync/conflict-detection.js";
+import { PartialPaymentPolicy } from "@/application/sync/partial-payment-policy.js";
+import { QboInvoiceSyncExecutor } from "@/application/sync/qbo-invoice-sync-executor.js";
+import { QboSyncContextResolver } from "@/application/sync/qbo-sync-context-resolver.js";
+import { QboDuplicateDocumentError, QboStaleObjectError } from "@/application/sync/qbo-sync-errors.js";
+import { SyncLinkStateMachine } from "@/application/sync/sync-link-state-machine.js";
+import { AuditRecorder } from "@/application/sync/audit-recorder.js";
+import { toCurrencyCode, toMoney, type Invoice, type QBOInvoicePort, type QBOInvoiceResult } from "@/domain/invoices/invoice.types.js";
+import type { PaymentSyncLinkRecord, SyncLinkRecord, SyncLinkPort } from "@/application/ports/sync.ports.js";
 
 function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {
   return {
     id: "inv-1",
     customerId: "cust-1",
     lineItems: [],
-    totalAmount: "100.00",
-    currency: "USD",
+    totalAmount: toMoney("100.00"),
+    currency: toCurrencyCode("USD"),
     status: "sent",
     dueDate: new Date("2030-01-01"),
     createdAt: new Date("2026-01-01"),
@@ -38,6 +38,20 @@ function makeSyncLink(overrides: Partial<SyncLinkRecord> = {}): SyncLinkRecord {
     version: 0,
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date("2026-01-01"),
+    ...overrides,
+  };
+}
+
+function makePaymentSyncLink(overrides: Partial<PaymentSyncLinkRecord> = {}): PaymentSyncLinkRecord {
+  return {
+    id: "psl-1",
+    internalId: "pay-1",
+    qboId: "qbo-pay-1",
+    invoiceInternalId: "inv-1",
+    syncStatus: "SYNCED",
+    lastSyncedAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
     ...overrides,
   };
 }
@@ -79,8 +93,8 @@ describe("QboSyncContextResolver", () => {
       lineItems: [{
         description: "Service",
         quantity: 1,
-        unitPrice: "10.00",
-        amount: "10.00",
+        unitPrice: toMoney("10.00"),
+        amount: toMoney("10.00"),
         internalItemCode: "svc",
         internalAccountCode: "sales",
       }],
@@ -109,12 +123,12 @@ describe("PartialPaymentPolicy", () => {
   it("blocks line item changes on invoices with linked payments", async () => {
     const policy = new PartialPaymentPolicy({
       findByInternalId: vi.fn(async () => null),
-      create: vi.fn(async () => ({ id: "psl-1", internalId: "pay-1", qboId: "qbo-pay-1", invoiceInternalId: "inv-1", syncStatus: "SYNCED", lastSyncedAt: null, createdAt: new Date(), updatedAt: new Date() })),
-      findByInvoiceInternalId: vi.fn(async () => [{ id: "psl-1", internalId: "pay-1", qboId: "qbo-pay-1", invoiceInternalId: "inv-1", syncStatus: "SYNCED", lastSyncedAt: null, createdAt: new Date(), updatedAt: new Date() }]),
+      create: vi.fn(async () => makePaymentSyncLink()),
+      findByInvoiceInternalId: vi.fn(async () => [makePaymentSyncLink()]),
     });
 
     await expect(policy.assertEditable(
-      makeInvoice({ lineItems: [{ description: "Changed", quantity: 1, unitPrice: "100.00", amount: "100.00" }] }),
+      makeInvoice({ lineItems: [{ description: "Changed", quantity: 1, unitPrice: toMoney("100.00"), amount: toMoney("100.00") }] }),
       {
         customerId: "cust-1",
         lineItems: [{ description: "Original", quantity: 1, unitPrice: 100, amount: 100 }],
@@ -129,8 +143,8 @@ describe("PartialPaymentPolicy", () => {
   it("allows date-only changes on invoices with linked payments", async () => {
     const policy = new PartialPaymentPolicy({
       findByInternalId: vi.fn(async () => null),
-      create: vi.fn(async () => ({ id: "psl-1", internalId: "pay-1", qboId: "qbo-pay-1", invoiceInternalId: "inv-1", syncStatus: "SYNCED", lastSyncedAt: null, createdAt: new Date(), updatedAt: new Date() })),
-      findByInvoiceInternalId: vi.fn(async () => [{ id: "psl-1", internalId: "pay-1", qboId: "qbo-pay-1", invoiceInternalId: "inv-1", syncStatus: "SYNCED", lastSyncedAt: null, createdAt: new Date(), updatedAt: new Date() }]),
+      create: vi.fn(async () => makePaymentSyncLink()),
+      findByInvoiceInternalId: vi.fn(async () => [makePaymentSyncLink()]),
     });
 
     await expect(policy.assertEditable(
@@ -240,9 +254,9 @@ describe("SyncLinkStateMachine", () => {
 
 describe("conflict comparators", () => {
   it("does not conflict on equivalent money and date representations", () => {
-    const snapshot = makeInvoice({ totalAmount: "100.00", dueDate: new Date("2030-01-01T00:00:00.000Z") });
-    const internal = makeInvoice({ totalAmount: "100.00", dueDate: new Date("2030-01-01T12:00:00.000Z") });
-    const qbo = makeInvoice({ totalAmount: "100.00", dueDate: new Date("2030-01-01T06:00:00.000Z") });
+    const snapshot = makeInvoice({ totalAmount: toMoney("100.00"), dueDate: new Date("2030-01-01T00:00:00.000Z") });
+    const internal = makeInvoice({ totalAmount: toMoney("100.00"), dueDate: new Date("2030-01-01T12:00:00.000Z") });
+    const qbo = makeInvoice({ totalAmount: toMoney("100.00"), dueDate: new Date("2030-01-01T06:00:00.000Z") });
 
     expect(detectConflicts(snapshot, internal, qbo).hasConflict).toBe(false);
   });

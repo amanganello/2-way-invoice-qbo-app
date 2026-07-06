@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { reconcileInvoice, type ReconcileDeps } from "../../application/sync/reconcile.use-case.js";
-import { QboDuplicateDocumentError } from "../../application/sync/qbo-sync-errors.js";
-import { toMoney, toCurrencyCode, type Invoice, type QBOInvoicePort, type QBOInvoiceResult, type QBOSyncContext } from "../../domain/invoices/invoice.types.js";
-import type { SyncLinkRecord } from "../../application/ports/sync.ports.js";
+import { reconcileInvoice, type ReconcileDeps } from "@/application/sync/reconcile.use-case.js";
+import { QboDuplicateDocumentError } from "@/application/sync/qbo-sync-errors.js";
+import { toMoney, toCurrencyCode, type Invoice, type QBOInvoicePort, type QBOInvoiceResult, type QBOSyncContext } from "@/domain/invoices/invoice.types.js";
+import type { PaymentSyncLinkRecord, SyncLinkRecord } from "@/application/ports/sync.ports.js";
 
 function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {
   return {
@@ -29,6 +29,20 @@ function makeSyncLink(overrides: Partial<SyncLinkRecord> = {}): SyncLinkRecord {
   };
 }
 
+function makePaymentSyncLink(overrides: Partial<PaymentSyncLinkRecord> = {}): PaymentSyncLinkRecord {
+  return {
+    id: "psl-1",
+    internalId: "pay-1",
+    qboId: "qbo-pay-1",
+    invoiceInternalId: "inv-1",
+    syncStatus: "SYNCED",
+    lastSyncedAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  };
+}
+
 function makeDeps(overrides: Partial<Parameters<typeof reconcileInvoice>[1]> = {}) {
   const deps = {
     invoiceRepo: { findById: vi.fn(async () => makeInvoice()), save: vi.fn(async (i: Invoice) => i) },
@@ -50,7 +64,7 @@ function makeDeps(overrides: Partial<Parameters<typeof reconcileInvoice>[1]> = {
     paymentSyncLinkRepo: {
       findByInternalId: vi.fn(async () => null),
       findByInvoiceInternalId: vi.fn(async () => []),
-      create: vi.fn(async () => ({ id: "psl-1", internalId: "pay-1", qboId: "qbo-pay-1", invoiceInternalId: "inv-1", syncStatus: "SYNCED", lastSyncedAt: null, createdAt: new Date(), updatedAt: new Date() })),
+      create: vi.fn(async () => makePaymentSyncLink()),
     },
     accountMapRepo: { findByInternalCode: vi.fn(async () => null), upsertMany: vi.fn(async () => 0), findAll: vi.fn(async () => []) },
     itemMapRepo: { findByInternalCode: vi.fn(async () => null), upsertMany: vi.fn(async () => 0), findAll: vi.fn(async () => []) },
@@ -66,7 +80,7 @@ function makeDeps(overrides: Partial<Parameters<typeof reconcileInvoice>[1]> = {
       getInvoice: vi.fn(async () => makeQBOResult()),
       findByDocNumber: vi.fn(async () => null),
     } as QBOInvoicePort,
-    auditLogRepo: { create: vi.fn(async () => {}) },
+    auditLogRepo: { create: vi.fn(async () => {}), findBySyncLinkId: vi.fn(async () => []) },
     qbDefaultCustomerId: undefined,
     qbEnvironment: "sandbox",
     ...overrides,
@@ -167,7 +181,7 @@ describe("reconcileInvoice", () => {
       },
       paymentSyncLinkRepo: {
         ...makeDeps().paymentSyncLinkRepo,
-        findByInvoiceInternalId: vi.fn(async () => [{ id: "psl-1" }]),
+        findByInvoiceInternalId: vi.fn(async () => [makePaymentSyncLink()]),
       },
     });
     await expect(reconcileInvoice("inv-1", deps)).rejects.toThrow(
@@ -229,7 +243,7 @@ describe("reconcileInvoice", () => {
       },
       paymentSyncLinkRepo: {
         ...makeDeps().paymentSyncLinkRepo,
-        findByInvoiceInternalId: vi.fn(async () => [{ id: "psl-1" }]),  // has payments
+        findByInvoiceInternalId: vi.fn(async () => [makePaymentSyncLink()]),  // has payments
       },
       invoiceRepo: {
         findById: vi.fn(async () => makeInvoice({
@@ -267,7 +281,7 @@ describe("reconcileInvoice", () => {
       },
       paymentSyncLinkRepo: {
         ...makeDeps().paymentSyncLinkRepo,
-        findByInvoiceInternalId: vi.fn(async () => [{ id: "psl-1" }]),
+        findByInvoiceInternalId: vi.fn(async () => [makePaymentSyncLink()]),
       },
     });
     // dueDate change is allowed on partially-paid invoices
