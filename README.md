@@ -320,13 +320,13 @@ tradeoff reasoning.
 
 1. Push repo to GitHub
 2. Create new Railway project → "Deploy from GitHub repo"
-3. Add Postgres plugin → DATABASE_URL set automatically
-4. Add Redis plugin → REDIS_URL set automatically
-5. Set env vars (QB_CLIENT_ID, QB_CLIENT_SECRET, QB_REALM_ID, QB_WEBHOOK_VERIFIER_TOKEN, QB_REDIRECT_URI, TOKEN_ENCRYPTION_KEY, API_KEY, QB_ENVIRONMENT=sandbox)
-6. Configure the deploy/pre-deploy command to run `pnpm migrate`
-7. Use the checked-in `railway.toml` services: `web` starts `node dist/server.js`; `worker` starts `node dist/worker.js`
+3. Add Postgres plugin and set the app service `DATABASE_URL` to the Postgres reference variable.
+4. Set `REDIS_URL` to an external Redis URL, such as Upstash/Redis Cloud. BullMQ requires a `redis://` or `rediss://` URL, not an HTTP REST URL.
+5. Set env vars (QB_CLIENT_ID, QB_CLIENT_SECRET, QB_REALM_ID, QB_WEBHOOK_VERIFIER_TOKEN, QB_REDIRECT_URI, TOKEN_ENCRYPTION_KEY, API_KEY, QB_ENVIRONMENT=sandbox).
+6. For a single-service demo deploy, set `RUN_WORKERS_IN_WEB=true` so BullMQ workers run inside the web process. For production, prefer a separate worker process and leave it `false`.
+7. Configure the deploy/pre-deploy command to run `pnpm migrate`.
 8. Set `QB_REDIRECT_URI=https://<web>.railway.app/auth/qbo/callback` and `FRONTEND_URL=https://<web>.railway.app` in Railway env vars, then open the app's Auth tab and click **Reconnect QBO** to complete the OAuth flow in the browser — no terminal access required.
-9. Set QBO webhook endpoint to `https://<web-service>.railway.app/webhooks/qbo`
+9. Set QBO webhook endpoint to `https://<web-service>.railway.app/webhooks/qbo`.
 
 ---
 

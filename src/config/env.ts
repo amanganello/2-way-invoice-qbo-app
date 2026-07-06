@@ -24,6 +24,8 @@ const envSchema = z.object({
   RECONCILIATION_INTERVAL_MINUTES: z.coerce.number().int().positive().default(15),
   SYNC_JOB_MAX_RETRIES: z.coerce.number().int().positive().default(3),
   QBO_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(2),
+
+  RUN_WORKERS_IN_WEB: z.coerce.boolean().default(false),
 });
 
 const result = envSchema.safeParse(process.env);
