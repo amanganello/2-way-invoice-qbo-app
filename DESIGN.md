@@ -257,12 +257,35 @@ the highest-effort feature relative to evaluation signal. The
 `internal-to-qbo` direction and webhook-driven sync fully demonstrate
 the bidirectional architecture.
 
-**Distributed token refresh lock** — the in-process mutex is sufficient
-for a single-worker deployment. Multi-worker deployments would need a
-Redis `SET NX PX` lock to coordinate across processes.
+---
+
+## Production Hardening Deferred
+
+Items that are correct for a single-process sandbox deployment but
+would need to be addressed before scaling or hardening for production.
+
+**Distributed QBO token-refresh lock** — the in-process `refreshPromise`
+mutex is sufficient when one process owns the worker. In a multi-worker
+deployment, two processes hitting an expiring token simultaneously would
+each trigger a separate OAuth refresh, and Intuit refresh tokens are
+one-time-use — the second refresh call fails or produces a token that
+is immediately overwritten. The fix is a Redis `SET NX PX` distributed
+lock so only one process performs the refresh; all others wait and pick
+up the new token from the DB.
+
+**Webhook queue + EventLog atomicity** — the webhook handler writes an
+`EventLog` row, then enqueues the BullMQ pull job, then the pull worker
+marks the event `PROCESSED` or `FAILED`. Duplicate `PROCESSED`/`SKIPPED`
+events are ignored; duplicate `PENDING`/`FAILED` events are re-enqueued,
+which recovers from a crash between the DB insert and BullMQ enqueue.
+This is pragmatic and retry-safe for the demo, but still not a full
+transactional outbox: a production version would write a `WebhookOutbox`
+row in the same DB transaction as the `EventLog` insert and have a
+separate poller move outbox rows into BullMQ.
 
 **Post-sync change check** — BullMQ's jobId deduplication only prevents
-duplicate jobs in `waiting` state. A change arriving while a job is
-`active` is silently dropped; the reconciliation job recovers it within
-15 minutes. Production would add a `invoice.updatedAt > jobStartedAt`
-check and re-enqueue before exiting.
+duplicate jobs in `waiting` state. A change arriving while a reconcile
+job is `active` is silently dropped; the next reconciliation cycle
+(≤15 min) recovers it. Production would add an
+`invoice.updatedAt > jobStartedAt` check before the worker exits: if
+true, re-enqueue immediately rather than waiting for the reconciler.

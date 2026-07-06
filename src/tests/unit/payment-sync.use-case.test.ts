@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import { syncPayment, type PaymentSyncDeps } from "@/application/sync/payment-sync.use-case";
-import { QboDuplicateDocumentError } from "@/application/sync/qbo-sync-errors";
-import type { Invoice, Payment } from "@/domain/invoices/invoice.types";
+import { syncPayment, type PaymentSyncDeps } from "../../application/sync/payment-sync.use-case.js";
+import { QboDuplicateDocumentError } from "../../application/sync/qbo-sync-errors.js";
+import type { Invoice, Payment } from "../../domain/invoices/invoice.types.js";
 
 function makePayment(overrides: Partial<Payment> = {}): Payment {
   return { id: "pay-1", invoiceId: "inv-1", amount: "100.00", currency: "USD", paidAt: new Date(), ...overrides };

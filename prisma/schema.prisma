@@ -51,8 +51,9 @@ model Invoice {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  payments Payment[]
-  syncLink SyncLink?
+  payments         Payment[]
+  syncLink         SyncLink?
+  paymentSyncLinks PaymentSyncLink[]
 
   @@index([customerId])
   @@index([status])
@@ -101,6 +102,8 @@ model PaymentSyncLink {
   lastSyncedAt      DateTime?
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
+
+  invoice Invoice @relation(fields: [invoiceInternalId], references: [id], onDelete: Restrict)
 
   @@index([syncStatus])
   @@index([invoiceInternalId])

@@ -87,21 +87,7 @@ export async function registerWebhookRoutes(app: FastifyInstance): Promise<void>
         for (const entity of entities) {
           const eventId = `${entity.name}-${entity.id}-${entity.lastUpdated}`;
 
-          // Enqueue BEFORE writing EventLog — if enqueue fails, no dedup row committed, QBO can retry
-          try {
-            await invoiceSyncQueue.add(
-              "pull",
-              { qboId: entity.id, entityType: entity.name, eventType: entity.operation, eventId },
-              { jobId: `pull-${eventId}` }
-            );
-          } catch (err) {
-            logger.error({ err, qboId: entity.id, eventId }, "Failed to enqueue pull job");
-            return reply.status(503).send({ error: "Queue unavailable" });
-          }
-
-          // Write EventLog after job is durably queued
-          // skipDuplicates handles concurrent retries; count === 0 means duplicate event
-          const result = await prisma.eventLog.createMany({
+          const created = await prisma.eventLog.createMany({
             data: [{
               eventId,
               source: "QBO",
@@ -111,9 +97,34 @@ export async function registerWebhookRoutes(app: FastifyInstance): Promise<void>
             skipDuplicates: true,
           });
 
-          if (result.count === 0) {
-            // Duplicate event — enqueue above was redundant but BullMQ jobId dedup is safe
-            logger.debug({ eventId }, "Duplicate webhook event — skipped EventLog");
+          if (created.count === 0) {
+            const existing = await prisma.eventLog.findUnique({ where: { eventId } });
+            if (existing?.status === "PROCESSED" || existing?.status === "SKIPPED") {
+              logger.debug({ eventId, status: existing?.status }, "Duplicate webhook event — skipped enqueue");
+              continue;
+            }
+
+            if (existing?.status === "FAILED") {
+              await prisma.eventLog.updateMany({
+                where: { eventId },
+                data: { status: "PENDING", processedAt: null },
+              });
+            }
+          }
+
+          try {
+            await invoiceSyncQueue.add(
+              "pull",
+              { qboId: entity.id, entityType: entity.name, eventType: entity.operation, eventId },
+              { jobId: `pull-${eventId}` }
+            );
+          } catch (err) {
+            logger.error({ err, qboId: entity.id, eventId }, "Failed to enqueue pull job");
+            await prisma.eventLog.updateMany({
+              where: { eventId },
+              data: { status: "FAILED" },
+            });
+            return reply.status(503).send({ error: "Queue unavailable" });
           }
         }
 

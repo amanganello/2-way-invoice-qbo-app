@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import { pullInvoice, type PullDeps } from "@/application/sync/pull.use-case";
-import type { Invoice, QBOInvoiceResult } from "@/domain/invoices/invoice.types";
-import type { SyncLinkRecord } from "@/application/ports/sync.ports";
+import { pullInvoice, type PullDeps } from "../../application/sync/pull.use-case.js";
+import type { Invoice, QBOInvoiceResult } from "../../domain/invoices/invoice.types.js";
+import type { SyncLinkRecord } from "../../application/ports/sync.ports.js";
 
 function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {
   return {

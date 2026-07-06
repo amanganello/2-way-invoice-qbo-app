@@ -17,9 +17,9 @@ COPY src ./src
 COPY client ./client
 RUN pnpm install --frozen-lockfile
 RUN cd client && pnpm build
+RUN pnpm prisma generate
 # Build API
 RUN pnpm exec tsc --project tsconfig.json
-RUN pnpm prisma generate
 
 # Production image
 FROM node:24-alpine AS production

@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { detectConflicts } from "@/application/sync/conflict-detection";
-import { PartialPaymentPolicy } from "@/application/sync/partial-payment-policy";
-import { QboInvoiceSyncExecutor } from "@/application/sync/qbo-invoice-sync-executor";
-import { QboSyncContextResolver } from "@/application/sync/qbo-sync-context-resolver";
-import { QboDuplicateDocumentError, QboStaleObjectError } from "@/application/sync/qbo-sync-errors";
-import { SyncLinkStateMachine } from "@/application/sync/sync-link-state-machine";
-import { AuditRecorder } from "@/application/sync/audit-recorder";
-import type { Invoice, QBOInvoicePort, QBOInvoiceResult } from "@/domain/invoices/invoice.types";
-import type { SyncLinkRecord, SyncLinkPort } from "@/application/ports/sync.ports";
+import { detectConflicts } from "../../application/sync/conflict-detection.js";
+import { PartialPaymentPolicy } from "../../application/sync/partial-payment-policy.js";
+import { QboInvoiceSyncExecutor } from "../../application/sync/qbo-invoice-sync-executor.js";
+import { QboSyncContextResolver } from "../../application/sync/qbo-sync-context-resolver.js";
+import { QboDuplicateDocumentError, QboStaleObjectError } from "../../application/sync/qbo-sync-errors.js";
+import { SyncLinkStateMachine } from "../../application/sync/sync-link-state-machine.js";
+import { AuditRecorder } from "../../application/sync/audit-recorder.js";
+import type { Invoice, QBOInvoicePort, QBOInvoiceResult } from "../../domain/invoices/invoice.types.js";
+import type { SyncLinkRecord, SyncLinkPort } from "../../application/ports/sync.ports.js";
 
 function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {
   return {

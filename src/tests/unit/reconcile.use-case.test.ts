@@ -1,13 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
-import { reconcileInvoice, type ReconcileDeps } from "@/application/sync/reconcile.use-case";
-import { QboDuplicateDocumentError } from "@/application/sync/qbo-sync-errors";
-import type { Invoice, QBOInvoicePort, QBOInvoiceResult, QBOSyncContext } from "@/domain/invoices/invoice.types";
-import type { SyncLinkRecord } from "@/application/ports/sync.ports";
+import { reconcileInvoice, type ReconcileDeps } from "../../application/sync/reconcile.use-case.js";
+import { QboDuplicateDocumentError } from "../../application/sync/qbo-sync-errors.js";
+import { toMoney, toCurrencyCode, type Invoice, type QBOInvoicePort, type QBOInvoiceResult, type QBOSyncContext } from "../../domain/invoices/invoice.types.js";
+import type { SyncLinkRecord } from "../../application/ports/sync.ports.js";
 
 function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {
   return {
     id: "inv-1", customerId: "cust-1", lineItems: [],
-    totalAmount: "100.00", currency: "USD", status: "sent",
+    totalAmount: toMoney("100.00"), currency: toCurrencyCode("USD"), status: "sent",
     dueDate: new Date("2030-01-01"), createdAt: new Date(), updatedAt: new Date(),
     ...overrides,
   };
@@ -122,7 +122,7 @@ describe("reconcileInvoice", () => {
   it("throws ExternalServiceError when customer not in CustomerMap and no fallback", async () => {
     const deps = makeDeps({
       syncLinkRepo: { ...makeDeps().syncLinkRepo, findByInternalId: vi.fn(async () => null) },
-      customerMapRepo: { findByInternalId: vi.fn(async () => null) },
+      customerMapRepo: { ...makeDeps().customerMapRepo, findByInternalId: vi.fn(async () => null) },
       qbDefaultCustomerId: undefined,
       qbEnvironment: "production",
     });
@@ -132,7 +132,7 @@ describe("reconcileInvoice", () => {
   it("uses QB_DEFAULT_CUSTOMER_ID fallback in sandbox when no CustomerMap entry", async () => {
     const deps = makeDeps({
       syncLinkRepo: { ...makeDeps().syncLinkRepo, findByInternalId: vi.fn(async () => null) },
-      customerMapRepo: { findByInternalId: vi.fn(async () => null) },
+      customerMapRepo: { ...makeDeps().customerMapRepo, findByInternalId: vi.fn(async () => null) },
       qbDefaultCustomerId: "DEFAULT-CUST",
       qbEnvironment: "sandbox",
     });
@@ -155,7 +155,7 @@ describe("reconcileInvoice", () => {
         ...makeDeps().invoiceRepo,
         findById: vi.fn(async () =>
           makeInvoice({
-            lineItems: [{ description: "Changed", quantity: 2, unitPrice: "50.00", amount: "100.00" }],
+            lineItems: [{ description: "Changed", quantity: 2, unitPrice: toMoney("50.00"), amount: toMoney("100.00") }],
           })
         ),
       },
@@ -166,6 +166,7 @@ describe("reconcileInvoice", () => {
         ),
       },
       paymentSyncLinkRepo: {
+        ...makeDeps().paymentSyncLinkRepo,
         findByInvoiceInternalId: vi.fn(async () => [{ id: "psl-1" }]),
       },
     });
@@ -227,12 +228,13 @@ describe("reconcileInvoice", () => {
         })),
       },
       paymentSyncLinkRepo: {
+        ...makeDeps().paymentSyncLinkRepo,
         findByInvoiceInternalId: vi.fn(async () => [{ id: "psl-1" }]),  // has payments
       },
       invoiceRepo: {
         findById: vi.fn(async () => makeInvoice({
-          totalAmount: "100.00",  // string format
-          lineItems: [{ description: "Service", quantity: 1, unitPrice: "100.00", amount: "100.00" }],
+          totalAmount: toMoney("100.00"),
+          lineItems: [{ description: "Service", quantity: 1, unitPrice: toMoney("100.00"), amount: toMoney("100.00") }],
         })),
         save: vi.fn(async (i: Invoice) => i),
       },
@@ -264,6 +266,7 @@ describe("reconcileInvoice", () => {
         ),
       },
       paymentSyncLinkRepo: {
+        ...makeDeps().paymentSyncLinkRepo,
         findByInvoiceInternalId: vi.fn(async () => [{ id: "psl-1" }]),
       },
     });
