@@ -1,4 +1,5 @@
-import type { Invoice, QBOInvoicePort, QBOInvoiceResult, QBOSyncContext } from "@/domain/invoices/invoice.types.js";
+import type { Invoice } from "@/domain/invoices/invoice.types.js";
+import type { QBOInvoicePort, QBOInvoiceResult, QBOSyncContext } from "@/application/ports/qbo.ports.js";
 import type { SyncLinkRecord } from "@/application/ports/sync.ports.js";
 import { invoiceToSnapshot } from "./invoice-snapshot.js";
 import { AuditRecorder, SyncAuditAction } from "./audit-recorder.js";

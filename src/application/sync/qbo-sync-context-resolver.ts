@@ -1,4 +1,5 @@
-import type { Invoice, QBOSyncContext } from "@/domain/invoices/invoice.types.js";
+import type { Invoice } from "@/domain/invoices/invoice.types.js";
+import type { QBOSyncContext } from "@/application/ports/qbo.ports.js";
 import type { AccountMapPort, CustomerMapPort, ItemMapPort } from "@/application/ports/sync.ports.js";
 import { ExternalServiceError } from "@/shared/errors/app-error.js";
 

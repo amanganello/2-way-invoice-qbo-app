@@ -5,7 +5,8 @@ import { createInvoice, updateInvoice } from "@/application/invoices/invoice.use
 import { createPayment } from "@/application/invoices/payment.use-cases.js";
 import { syncQueue } from "@/infrastructure/queue/queues.js";
 import { CreateInvoiceSchema, UpdateInvoiceSchema, InvoiceParamsSchema, InvoiceListQuerySchema } from "./invoice.schemas.js";
-import { CurrencyCodeSchema, MoneySchema, type Invoice, type InvoiceRepository, type PaymentRepository, type SyncQueuePort } from "@/domain/invoices/invoice.types.js";
+import { CurrencyCodeSchema, MoneySchema, type Invoice } from "@/domain/invoices/invoice.types.js";
+import type { InvoiceRepository, PaymentRepository, SyncQueuePort } from "@/application/ports/invoice.ports.js";
 import { z } from "zod";
 
 const CreatePaymentSchema = z.object({

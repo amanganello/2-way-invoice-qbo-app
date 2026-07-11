@@ -6,7 +6,8 @@ import { QboSyncContextResolver } from "@/application/sync/qbo-sync-context-reso
 import { QboDuplicateDocumentError, QboStaleObjectError } from "@/application/sync/qbo-sync-errors.js";
 import { SyncLinkStateMachine } from "@/application/sync/sync-link-state-machine.js";
 import { AuditRecorder } from "@/application/sync/audit-recorder.js";
-import { toCurrencyCode, toMoney, type Invoice, type QBOInvoicePort, type QBOInvoiceResult } from "@/domain/invoices/invoice.types.js";
+import { toCurrencyCode, toMoney, type Invoice } from "@/domain/invoices/invoice.types.js";
+import type { QBOInvoicePort, QBOInvoiceResult } from "@/application/ports/qbo.ports.js";
 import type { PaymentSyncLinkRecord, SyncLinkRecord, SyncLinkPort } from "@/application/ports/sync.ports.js";
 
 function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {

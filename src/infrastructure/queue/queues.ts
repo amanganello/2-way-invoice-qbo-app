@@ -1,7 +1,7 @@
 import { Queue } from "bullmq";
 import { redisConnection } from "./redis.js";
 import { env } from "@/config/env.js";
-import type { SyncQueuePort } from "@/domain/invoices/invoice.types.js";
+import type { SyncQueuePort } from "@/application/ports/invoice.ports.js";
 
 const defaultJobOptions = {
   attempts: env.SYNC_JOB_MAX_RETRIES,

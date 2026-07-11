@@ -1,7 +1,6 @@
-import type {
-  Invoice, QBOInvoicePort, QBOSyncContext, QBOInvoiceResult, InvoiceStatus,
-} from "@/domain/invoices/invoice.types.js";
+import type { Invoice, InvoiceStatus } from "@/domain/invoices/invoice.types.js";
 import { CurrencyCodeSchema, MoneySchema } from "@/domain/invoices/invoice.types.js";
+import type { QBOInvoicePort, QBOSyncContext, QBOInvoiceResult } from "@/application/ports/qbo.ports.js";
 import { NotFoundError } from "@/shared/errors/app-error.js";
 import { qboClient } from "./qbo.client.js";
 import type { QBOInvoiceEntity, QBOLine } from "./qbo.types.js";

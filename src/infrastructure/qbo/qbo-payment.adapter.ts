@@ -1,4 +1,5 @@
-import type { Payment, QBOPaymentPort, QBOPaymentResult } from "@/domain/invoices/invoice.types.js";
+import type { Payment } from "@/domain/invoices/invoice.types.js";
+import type { QBOPaymentPort, QBOPaymentResult } from "@/application/ports/qbo.ports.js";
 import { qboClient } from "./qbo.client.js";
 import type { QBOPaymentEntity } from "./qbo.types.js";
 import { z } from "zod";
