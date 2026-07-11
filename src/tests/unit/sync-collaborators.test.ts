@@ -185,6 +185,7 @@ describe("QboInvoiceSyncExecutor", () => {
       voidInvoice: vi.fn(async () => makeQboResult()),
       getInvoice: vi.fn(async () => makeQboResult({ qboSyncToken: "fresh" })),
       findByDocNumber: vi.fn(async () => null),
+      listInvoices: vi.fn(async () => []),
       ...overrides,
     } satisfies QBOInvoicePort;
     const auditLogRepo = { create: vi.fn(async () => {}), findBySyncLinkId: vi.fn(async () => []) };

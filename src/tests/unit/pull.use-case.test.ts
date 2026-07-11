@@ -55,6 +55,7 @@ function makeDeps() {
       updateInvoice: vi.fn(async () => makeQBOResult()),
       voidInvoice: vi.fn(async () => makeQBOResult()),
       findByDocNumber: vi.fn(async () => null),
+      listInvoices: vi.fn(async () => []),
     },
     auditLogRepo: { create: vi.fn(async () => {}), findBySyncLinkId: vi.fn(async () => []) },
   } satisfies PullDeps;
