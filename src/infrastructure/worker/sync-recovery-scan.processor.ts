@@ -1,11 +1,11 @@
-import { runReconciliation } from "@/application/sync/reconciliation.use-case.js";
+import { runSyncRecoveryScan } from "@/application/sync/sync-recovery-scan.use-case.js";
 import { syncLinkRepository } from "@/infrastructure/database/sync-link.repository.js";
 import { invoiceSyncQueue, paymentSyncQueue } from "@/infrastructure/queue/queues.js";
 import { env } from "@/config/env.js";
 import logger from "@/infrastructure/logger/index.js";
 
-export async function reconciliationProcessor(): Promise<void> {
-  await runReconciliation({
+export async function syncRecoveryScanProcessor(): Promise<void> {
+  await runSyncRecoveryScan({
     syncLinkRepo: syncLinkRepository,
     enqueueReconcile: async (internalId) => {
       await invoiceSyncQueue.add(

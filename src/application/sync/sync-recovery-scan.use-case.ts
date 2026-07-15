@@ -1,13 +1,13 @@
 import type { SyncLinkPort } from "@/application/ports/sync.ports.js";
 import logger from "@/infrastructure/logger/index.js";
 
-export type ReconciliationDeps = {
+export type SyncRecoveryScanDeps = {
   syncLinkRepo: Pick<SyncLinkPort, "findStuckProcessing" | "findByStatuses" | "findUnsynced" | "findInvoicesWithoutSyncLink" | "setStatus">;
   enqueueReconcile: (internalId: string) => Promise<void>;
   enqueueFailedPaymentRetries?: () => Promise<void>;
 };
 
-export async function runReconciliation(deps: ReconciliationDeps): Promise<void> {
+export async function runSyncRecoveryScan(deps: SyncRecoveryScanDeps): Promise<void> {
   const { syncLinkRepo, enqueueReconcile } = deps;
 
   // Watchdog: reset stuck PROCESSING records (crashed workers)
@@ -43,6 +43,6 @@ export async function runReconciliation(deps: ReconciliationDeps): Promise<void>
 
   logger.info(
     { watchdogReset: stuck.length, enqueued: seen.size },
-    "Reconciliation cycle complete"
+    "Recovery scan cycle complete"
   );
 }

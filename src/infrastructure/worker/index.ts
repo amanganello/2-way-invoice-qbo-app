@@ -3,7 +3,7 @@ import { redisConnection } from "@/infrastructure/queue/redis.js";
 import { reconcileProcessor } from "./reconcile.processor.js";
 import { pullProcessor } from "./pull.processor.js";
 import { paymentProcessor } from "./payment.processor.js";
-import { reconciliationProcessor } from "./reconciliation.processor.js";
+import { syncRecoveryScanProcessor } from "./sync-recovery-scan.processor.js";
 import { startScheduler } from "./scheduler.js";
 import { env } from "@/config/env.js";
 import logger from "@/infrastructure/logger/index.js";
@@ -28,7 +28,7 @@ export function startWorkers(): { workers: Worker[]; stop: () => Promise<void> }
   });
 
   const reconciliationWorker = new Worker("reconciliation", async () => {
-    return reconciliationProcessor();
+    return syncRecoveryScanProcessor();
   }, {
     connection: redisConnection,
     concurrency: 1,

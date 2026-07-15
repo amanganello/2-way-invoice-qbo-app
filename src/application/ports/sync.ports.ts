@@ -162,10 +162,6 @@ export interface ReconcileQueuePort {
   enqueueReconcile(internalId: string): Promise<void>;
 }
 
-export interface InvoiceListPort {
-  findInvoicesWithoutSyncLink(limit?: number): Promise<Array<{ internalId: string; internalUpdatedAt?: Date }>>;
-}
-
 export type InvoiceSnapshotPort = {
   invoiceToSnapshot(invoice: Invoice): Record<string, unknown>;
 };
