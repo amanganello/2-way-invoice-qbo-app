@@ -43,36 +43,38 @@ export class QboSyncContextResolver {
   }
 
   private async resolveItemMap(invoice: Invoice): Promise<QBOSyncContext["itemMap"]> {
-    const itemMap: QBOSyncContext["itemMap"] = new Map();
     const codes = [...new Set(
       invoice.lineItems
         .map(line => line.internalItemCode)
         .filter((code): code is string => Boolean(code))
     )];
 
-    for (const code of codes) {
-      const entry = await this.deps.itemMapRepo.findByInternalCode(code);
-      if (!entry) throw new ExternalServiceError(`No ItemMap entry for code: ${code}`);
-      itemMap.set(code, { qboItemId: entry.qboItemId, taxCode: entry.defaultTaxCode });
-    }
+    const entries = await Promise.all(
+      codes.map(async (code) => {
+        const entry = await this.deps.itemMapRepo.findByInternalCode(code);
+        if (!entry) throw new ExternalServiceError(`No ItemMap entry for code: ${code}`);
+        return [code, { qboItemId: entry.qboItemId, taxCode: entry.defaultTaxCode }] as const;
+      })
+    );
 
-    return itemMap;
+    return new Map(entries);
   }
 
   private async resolveAccountMap(invoice: Invoice): Promise<QBOSyncContext["accountMap"]> {
-    const accountMap: QBOSyncContext["accountMap"] = new Map();
     const codes = [...new Set(
       invoice.lineItems
         .map(line => line.internalAccountCode)
         .filter((code): code is string => Boolean(code))
     )];
 
-    for (const code of codes) {
-      const entry = await this.deps.accountMapRepo.findByInternalCode(code);
-      if (!entry) throw new ExternalServiceError(`No AccountMap entry for code: ${code}`);
-      accountMap.set(code, { qboAccountId: entry.qboAccountId });
-    }
+    const entries = await Promise.all(
+      codes.map(async (code) => {
+        const entry = await this.deps.accountMapRepo.findByInternalCode(code);
+        if (!entry) throw new ExternalServiceError(`No AccountMap entry for code: ${code}`);
+        return [code, { qboAccountId: entry.qboAccountId }] as const;
+      })
+    );
 
-    return accountMap;
+    return new Map(entries);
   }
 }
