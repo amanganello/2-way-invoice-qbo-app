@@ -1,7 +1,7 @@
 import type { Invoice } from "@/domain/invoices/invoice.types.js";
 import type { PaymentSyncLinkPort } from "@/application/ports/sync.ports.js";
 import { ConflictError } from "@/shared/errors/app-error.js";
-import { parseInvoiceSnapshot } from "./invoice-snapshot.js";
+import { normalizeLineItemsForComparison, parseInvoiceSnapshot } from "./invoice-snapshot.js";
 
 export class PartialPaymentPolicy {
   constructor(private readonly paymentSyncLinkRepo: PaymentSyncLinkPort) {}
@@ -14,8 +14,8 @@ export class PartialPaymentPolicy {
 
     const snapshot = parseInvoiceSnapshot(lastSyncedSnapshot);
     const lineItemsChanged =
-      JSON.stringify(normalizeLineItems(invoice.lineItems)) !==
-      JSON.stringify(normalizeLineItems(snapshot.lineItems));
+      JSON.stringify(normalizeLineItemsForComparison(invoice.lineItems)) !==
+      JSON.stringify(normalizeLineItemsForComparison(snapshot.lineItems));
     const totalAmountChanged = invoice.totalAmount !== Number(snapshot.totalAmount).toFixed(2);
 
     if (lineItemsChanged || totalAmountChanged) {
@@ -25,15 +25,4 @@ export class PartialPaymentPolicy {
       );
     }
   }
-}
-
-function normalizeLineItems(items: unknown): unknown {
-  return Array.isArray(items)
-    ? (items as Array<{ unitPrice: number | string; amount: number | string; [key: string]: unknown }>)
-        .map(item => ({
-          ...item,
-          unitPrice: Number(item.unitPrice).toFixed(2),
-          amount: Number(item.amount).toFixed(2),
-        }))
-    : items;
 }
