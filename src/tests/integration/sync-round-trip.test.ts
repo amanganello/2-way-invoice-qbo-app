@@ -198,6 +198,7 @@ describe("Integration: sync round-trips", () => {
     // Simulate pull (QBO webhook)
     await pullInvoice("QBO-INV-1", "Update", "evt-test", {
       invoiceRepo, syncLinkRepo: syncLinkRepository, qboInvoicePort, auditLogRepo: auditLogRepository,
+      reconcileQueue: { enqueueReconcile: async () => {} },
     });
 
     const syncLink = await syncLinkRepository.findByInternalId(invoice.id);
@@ -215,11 +216,13 @@ describe("Integration: sync round-trips", () => {
     // First pull
     await pullInvoice("QBO-INV-1", "Update", "evt-1", {
       invoiceRepo, syncLinkRepo: syncLinkRepository, qboInvoicePort, auditLogRepo: auditLogRepository,
+      reconcileQueue: { enqueueReconcile: async () => {} },
     });
     // Second pull with same/older timestamp — should be skipped
     const link = await syncLinkRepository.findByInternalId(invoice.id);
     await pullInvoice("QBO-INV-1", "Update", "evt-2", {
       invoiceRepo, syncLinkRepo: syncLinkRepository, qboInvoicePort, auditLogRepo: auditLogRepository,
+      reconcileQueue: { enqueueReconcile: async () => {} },
     });
     const auditsAfter = await auditLogRepository.findBySyncLinkId(link!.id);
     const staleLog = auditsAfter.find(a => a.action === "skipped_stale");
@@ -284,6 +287,7 @@ describe("Integration: sync round-trips", () => {
 
     await pullInvoice("QBO-INV-1", "Void", "evt-void", {
       invoiceRepo, syncLinkRepo: syncLinkRepository, qboInvoicePort, auditLogRepo: auditLogRepository,
+      reconcileQueue: { enqueueReconcile: async () => {} },
     });
 
     const updated = await invoiceRepo.findById(invoice.id);
@@ -323,6 +327,7 @@ describe("Integration: sync round-trips", () => {
       // Step 4: pull — dueDate changed on both sides → rule "manual" → CONFLICT
       await pullInvoice("QBO-INV-1", "Update", "evt-conflict-test", {
         invoiceRepo, syncLinkRepo: syncLinkRepository, qboInvoicePort, auditLogRepo: auditLogRepository,
+        reconcileQueue: { enqueueReconcile: async () => {} },
       });
     } finally {
       // Restore the default GET handler

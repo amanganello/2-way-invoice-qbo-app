@@ -6,6 +6,7 @@ import { auditLogRepository } from "@/infrastructure/database/audit-log.reposito
 import { QBOInvoiceAdapter } from "@/infrastructure/qbo/qbo-invoice.adapter.js";
 import { eventLogRepository } from "@/infrastructure/database/event-log.repository.js";
 import logger from "@/infrastructure/logger/index.js";
+import { syncQueue } from "@/infrastructure/queue/queues.js";
 
 const invoiceRepo = new PrismaInvoiceRepository();
 const qboInvoicePort = new QBOInvoiceAdapter();
@@ -27,6 +28,7 @@ export async function pullProcessor(
       syncLinkRepo: syncLinkRepository,
       qboInvoicePort,
       auditLogRepo: auditLogRepository,
+      reconcileQueue: syncQueue,
     });
 
     await eventLogRepository.markProcessed(eventId);

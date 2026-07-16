@@ -1,6 +1,6 @@
 import type { InvoiceRepository } from "@/application/ports/invoice.ports.js";
 import type { QBOInvoicePort } from "@/application/ports/qbo.ports.js";
-import type { AuditLogPort, SyncLinkPort } from "@/application/ports/sync.ports.js";
+import type { AuditLogPort, ReconcileQueuePort, SyncLinkPort } from "@/application/ports/sync.ports.js";
 import { detectConflicts } from "./conflict-detection.js";
 import logger from "@/infrastructure/logger/index.js";
 import { invoiceToSnapshot, snapshotToInvoice } from "./invoice-snapshot.js";
@@ -10,6 +10,7 @@ export type PullDeps = {
   syncLinkRepo: SyncLinkPort;
   qboInvoicePort: QBOInvoicePort;
   auditLogRepo: AuditLogPort;
+  reconcileQueue: ReconcileQueuePort;
 };
 
 export async function pullInvoice(
@@ -18,7 +19,7 @@ export async function pullInvoice(
   sourceEventId: string,
   deps: PullDeps
 ): Promise<void> {
-  const { invoiceRepo, syncLinkRepo, qboInvoicePort, auditLogRepo } = deps;
+  const { invoiceRepo, syncLinkRepo, qboInvoicePort, auditLogRepo, reconcileQueue } = deps;
 
   const syncLink = await syncLinkRepo.findByQboId(qboId);
   if (!syncLink) {
@@ -39,6 +40,8 @@ export async function pullInvoice(
     );
     return;
   }
+
+  const prevStatus = syncLink.syncStatus;
 
   // Optimistic lock — set PROCESSING; version is incremented in DB on success
   const locked = await syncLinkRepo.setProcessing(syncLink.id, syncLink.version);
@@ -102,7 +105,7 @@ export async function pullInvoice(
       await auditLogRepo.create({
         syncLinkId: syncLink.id, action: "skipped_stale", sourceEventId, result: "SUCCESS",
       });
-      await syncLinkRepo.setStatus(syncLink.id, currentVersion, "SYNCED", {});
+      await syncLinkRepo.setStatus(syncLink.id, currentVersion, prevStatus, {});
       return;
     }
 
@@ -144,12 +147,23 @@ export async function pullInvoice(
       updatedAt: new Date(),
     });
 
-    await syncLinkRepo.setStatus(syncLink.id, currentVersion, "SYNCED", {
-      qboSyncToken: qboResult.qboSyncToken,
-      qboUpdatedAt: qboResult.qboUpdatedAt,
-      lastSyncedSnapshot: invoiceToSnapshot(conflictResult.mergedInvoice),
-      lastSyncedAt: new Date(),
-    });
+    if (prevStatus === "PENDING") {
+      // Internal had changes queued for QBO; restore PENDING so reconcile can push them.
+      // Update QBO tokens (fresh from this pull) but keep the old snapshot so reconcile
+      // detects the internal-only changes and pushes them.
+      await syncLinkRepo.setStatus(syncLink.id, currentVersion, "PENDING", {
+        qboSyncToken: qboResult.qboSyncToken,
+        qboUpdatedAt: qboResult.qboUpdatedAt,
+      });
+      await reconcileQueue.enqueueReconcile(syncLink.internalId);
+    } else {
+      await syncLinkRepo.setStatus(syncLink.id, currentVersion, "SYNCED", {
+        qboSyncToken: qboResult.qboSyncToken,
+        qboUpdatedAt: qboResult.qboUpdatedAt,
+        lastSyncedSnapshot: invoiceToSnapshot(conflictResult.mergedInvoice),
+        lastSyncedAt: new Date(),
+      });
+    }
 
     await auditLogRepo.create({
       syncLinkId: syncLink.id, action: "pull_applied", sourceEventId, result: "SUCCESS",
