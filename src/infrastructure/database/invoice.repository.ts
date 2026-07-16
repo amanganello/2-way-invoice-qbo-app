@@ -5,9 +5,9 @@ import {
   InvoiceLineItemSchema,
   MoneySchema,
   type Invoice,
-  type InvoiceRepository,
   type InvoiceStatus,
 } from "../../domain/invoices/invoice.types.js";
+import type { InvoiceRepository } from "../../application/ports/invoice.ports.js";
 
 const STATUS_TO_PRISMA: Record<InvoiceStatus, PrismaInvoiceStatus> = {
   draft: PrismaInvoiceStatus.DRAFT,

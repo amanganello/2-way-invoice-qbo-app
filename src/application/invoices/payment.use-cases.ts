@@ -1,4 +1,5 @@
-import type { Payment, PaymentInput, PaymentRepository, SyncQueuePort } from "@/domain/invoices/invoice.types.js";
+import type { Payment, PaymentInput } from "@/domain/invoices/invoice.types.js";
+import type { PaymentRepository, SyncQueuePort } from "@/application/ports/invoice.ports.js";
 
 export async function createPayment(
   data: PaymentInput,

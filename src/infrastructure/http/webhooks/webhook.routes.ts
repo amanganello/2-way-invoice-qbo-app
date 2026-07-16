@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { env } from "@/config/env.js";
-import { prisma } from "@/infrastructure/database/prisma.js";
+import { eventLogRepository } from "@/infrastructure/database/event-log.repository.js";
 import { invoiceSyncQueue } from "@/infrastructure/queue/queues.js";
 import { redisConnection } from "@/infrastructure/queue/redis.js";
 import logger from "@/infrastructure/logger/index.js";
@@ -87,28 +87,20 @@ export async function registerWebhookRoutes(app: FastifyInstance): Promise<void>
         for (const entity of entities) {
           const eventId = `${entity.name}-${entity.id}-${entity.lastUpdated}`;
 
-          const created = await prisma.eventLog.createMany({
-            data: [{
-              eventId,
-              source: "QBO",
-              eventType: entity.operation,
-              payload: entity as object,
-            }],
-            skipDuplicates: true,
+          const { created, status } = await eventLogRepository.createIfNotExists({
+            eventId,
+            source: "QBO",
+            eventType: entity.operation,
+            payload: entity as object,
           });
 
-          if (created.count === 0) {
-            const existing = await prisma.eventLog.findUnique({ where: { eventId } });
-            if (existing?.status === "PROCESSED" || existing?.status === "SKIPPED") {
-              logger.debug({ eventId, status: existing?.status }, "Duplicate webhook event — skipped enqueue");
+          if (!created) {
+            if (status === "PROCESSED" || status === "SKIPPED") {
+              logger.debug({ eventId, status }, "Duplicate webhook event — skipped enqueue");
               continue;
             }
-
-            if (existing?.status === "FAILED") {
-              await prisma.eventLog.updateMany({
-                where: { eventId },
-                data: { status: "PENDING", processedAt: null },
-              });
+            if (status === "FAILED") {
+              await eventLogRepository.resetToPending(eventId);
             }
           }
 
@@ -120,10 +112,7 @@ export async function registerWebhookRoutes(app: FastifyInstance): Promise<void>
             );
           } catch (err) {
             logger.error({ err, qboId: entity.id, eventId }, "Failed to enqueue pull job");
-            await prisma.eventLog.updateMany({
-              where: { eventId },
-              data: { status: "FAILED" },
-            });
+            await eventLogRepository.markFailed(eventId);
             return reply.status(503).send({ error: "Queue unavailable" });
           }
         }

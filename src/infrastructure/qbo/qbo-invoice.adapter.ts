@@ -1,7 +1,6 @@
-import type {
-  Invoice, QBOInvoicePort, QBOSyncContext, QBOInvoiceResult, InvoiceStatus,
-} from "@/domain/invoices/invoice.types.js";
+import type { Invoice, InvoiceStatus } from "@/domain/invoices/invoice.types.js";
 import { CurrencyCodeSchema, MoneySchema } from "@/domain/invoices/invoice.types.js";
+import type { QBOInvoicePort, QBOSyncContext, QBOInvoiceResult } from "@/application/ports/qbo.ports.js";
 import { NotFoundError } from "@/shared/errors/app-error.js";
 import { qboClient } from "./qbo.client.js";
 import type { QBOInvoiceEntity, QBOLine } from "./qbo.types.js";
@@ -46,6 +45,12 @@ const QueryResponseSchema = z.object({
     maxResults: z.number().optional(),
   }),
 });
+
+export const deriveInvoiceStatus = (entity: QBOInvoiceEntity): InvoiceStatus => {
+  if (!entity.Line?.length && (entity.TotalAmt ?? 0) === 0) return "void";
+  if (!entity.DocNumber) return "draft";
+  return "sent";
+};
 
 function buildLines(
   lineItems: Invoice["lineItems"],
@@ -111,11 +116,7 @@ function toResult(entity: QBOInvoiceEntity, fallbackInvoice?: Partial<Invoice>):
     // - No line items AND TotalAmt === 0 → invoice was voided via the void API
     // - DocNumber absent or empty → invoice is still a draft in QBO
     // - Otherwise → sent/posted
-    status: (
-      (!entity.Line?.length && (entity.TotalAmt ?? 0) === 0)
-        ? "void"
-        : (!entity.DocNumber ? "draft" : "sent")
-    ) as InvoiceStatus,
+    status: deriveInvoiceStatus(entity),
     dueDate: entity.DueDate ? new Date(entity.DueDate) : new Date(),
     createdAt: entity.MetaData ? new Date(entity.MetaData.CreateTime) : new Date(),
     updatedAt: entity.MetaData ? new Date(entity.MetaData.LastUpdatedTime) : new Date(),

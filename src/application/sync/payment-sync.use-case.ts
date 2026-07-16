@@ -1,4 +1,5 @@
-import type { PaymentRepository, InvoiceRepository, QBOPaymentPort } from "@/domain/invoices/invoice.types.js";
+import type { PaymentRepository, InvoiceRepository } from "@/application/ports/invoice.ports.js";
+import type { QBOPaymentPort } from "@/application/ports/qbo.ports.js";
 import type {
   AuditLogPort,
   CustomerMapPort,

@@ -1,5 +1,6 @@
-import { MoneySchema, type Invoice, type InvoiceLineItem } from "@/domain/invoices/invoice.types.js";
+import { MoneySchema, type Invoice } from "@/domain/invoices/invoice.types.js";
 import { conflictRules } from "./conflict-rules.js";
+import { normalizeLineItemsForComparison } from "./invoice-snapshot.js";
 
 export type ConflictField = {
   field: keyof Invoice;
@@ -24,7 +25,7 @@ const comparators: FieldComparators = {
   currency: (a, b) => a === b,
   status: (a, b) => a === b,
   dueDate: (a, b) => normalizeDate(a) === normalizeDate(b),
-  lineItems: (a, b) => JSON.stringify(normalizeLineItems(a)) === JSON.stringify(normalizeLineItems(b)),
+  lineItems: (a, b) => JSON.stringify(normalizeLineItemsForComparison(a)) === JSON.stringify(normalizeLineItemsForComparison(b)),
 };
 
 function equal<K extends keyof Invoice>(field: K, a: Invoice[K], b: Invoice[K]): boolean {
@@ -38,17 +39,6 @@ function normalizeMoney(value: unknown): string {
 
 function normalizeDate(value: Date): string {
   return value.toISOString().slice(0, 10);
-}
-
-function normalizeLineItems(items: InvoiceLineItem[]): Array<Record<string, unknown>> {
-  return items.map(item => ({
-    description: item.description,
-    quantity: item.quantity,
-    unitPrice: normalizeMoney(item.unitPrice),
-    amount: normalizeMoney(item.amount),
-    ...(item.internalItemCode ? { internalItemCode: item.internalItemCode } : {}),
-    ...(item.internalAccountCode ? { internalAccountCode: item.internalAccountCode } : {}),
-  }));
 }
 
 export function detectConflicts(

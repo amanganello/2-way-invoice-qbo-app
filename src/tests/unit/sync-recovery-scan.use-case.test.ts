@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { runReconciliation, type ReconciliationDeps } from "@/application/sync/reconciliation.use-case.js";
+import { runSyncRecoveryScan, type SyncRecoveryScanDeps } from "@/application/sync/sync-recovery-scan.use-case.js";
 import type { SyncLinkRecord } from "@/application/ports/sync.ports.js";
 
 function makeLink(overrides: Partial<SyncLinkRecord> = {}): SyncLinkRecord {
@@ -21,19 +21,19 @@ function makeDeps() {
       findInvoicesWithoutSyncLink: vi.fn(async () => []),
     },
     enqueueReconcile: vi.fn(async () => {}),
-  } satisfies ReconciliationDeps;
+  } satisfies SyncRecoveryScanDeps;
 }
 
-describe("runReconciliation", () => {
+describe("runSyncRecoveryScan", () => {
   it("resets stuck PROCESSING records to ERROR (watchdog)", async () => {
     const deps = makeDeps();
-    await runReconciliation(deps);
+    await runSyncRecoveryScan(deps);
     expect(deps.syncLinkRepo.setStatus).toHaveBeenCalledWith("stuck", 0, "ERROR", {});
   });
 
   it("enqueues reconcile for each PENDING|ERROR SyncLink", async () => {
     const deps = makeDeps();
-    await runReconciliation(deps);
+    await runSyncRecoveryScan(deps);
     expect(deps.enqueueReconcile).toHaveBeenCalledTimes(2);
     expect(deps.enqueueReconcile).toHaveBeenCalledWith("inv-1");
     expect(deps.enqueueReconcile).toHaveBeenCalledWith("inv-2");
@@ -43,7 +43,7 @@ describe("runReconciliation", () => {
     const deps = makeDeps();
     (deps.syncLinkRepo.findByStatuses as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (deps.syncLinkRepo.findUnsynced as ReturnType<typeof vi.fn>).mockResolvedValue([makeLink({ id: "new", internalId: "inv-new" })]);
-    await runReconciliation(deps);
+    await runSyncRecoveryScan(deps);
     expect(deps.enqueueReconcile).toHaveBeenCalledWith("inv-new");
   });
 
@@ -54,19 +54,19 @@ describe("runReconciliation", () => {
     (deps.syncLinkRepo.findInvoicesWithoutSyncLink as ReturnType<typeof vi.fn>).mockResolvedValue([
       { internalId: "inv-orphan" },
     ]);
-    await runReconciliation(deps);
+    await runSyncRecoveryScan(deps);
     expect(deps.enqueueReconcile).toHaveBeenCalledWith("inv-orphan");
   });
 
   it("calls enqueueFailedPaymentRetries when provided", async () => {
     const retryFn = vi.fn(async () => {});
     const deps = { ...makeDeps(), enqueueFailedPaymentRetries: retryFn };
-    await runReconciliation(deps);
+    await runSyncRecoveryScan(deps);
     expect(retryFn).toHaveBeenCalledOnce();
   });
 
   it("does not throw when enqueueFailedPaymentRetries is not provided", async () => {
     const deps = makeDeps();
-    await expect(runReconciliation(deps)).resolves.not.toThrow();
+    await expect(runSyncRecoveryScan(deps)).resolves.not.toThrow();
   });
 });

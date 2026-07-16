@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
-import { CurrencyCodeSchema, MoneySchema, type Payment, type PaymentRepository } from "@/domain/invoices/invoice.types.js";
+import { CurrencyCodeSchema, MoneySchema, type Payment } from "@/domain/invoices/invoice.types.js";
+import type { PaymentRepository } from "@/application/ports/invoice.ports.js";
 
 function toDomain(row: { id: string; invoiceId: string; amount: Prisma.Decimal; currency: string; paidAt: Date; createdAt: Date; updatedAt: Date }): Payment {
   return {

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { reconcileInvoice, type ReconcileDeps } from "@/application/sync/reconcile.use-case.js";
 import { QboDuplicateDocumentError } from "@/application/sync/qbo-sync-errors.js";
-import { toMoney, toCurrencyCode, type Invoice, type QBOInvoicePort, type QBOInvoiceResult, type QBOSyncContext } from "@/domain/invoices/invoice.types.js";
+import { toMoney, toCurrencyCode, type Invoice } from "@/domain/invoices/invoice.types.js";
+import type { QBOInvoicePort, QBOInvoiceResult, QBOSyncContext } from "@/application/ports/qbo.ports.js";
 import type { PaymentSyncLinkRecord, SyncLinkRecord } from "@/application/ports/sync.ports.js";
 
 function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {

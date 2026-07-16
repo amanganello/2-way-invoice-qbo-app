@@ -10,7 +10,8 @@ import type {
   SyncLinkPort,
   SyncStatusValue,
 } from "@/application/ports/sync.ports.js";
-import type { InvoiceRepository, QBOInvoicePort } from "@/domain/invoices/invoice.types.js";
+import type { InvoiceRepository } from "@/application/ports/invoice.ports.js";
+import type { QBOInvoicePort } from "@/application/ports/qbo.ports.js";
 import { invoiceToSnapshot } from "./invoice-snapshot.js";
 
 export type SyncManagementDeps = {

@@ -16,6 +16,55 @@ function toDomain(row: {
   };
 }
 
+async function updateExistingSyncLink(
+  id: string,
+  version: number,
+  data: {
+    qboId: string;
+    qboSyncToken: string;
+    qboUpdatedAt: Date;
+    snapshot: Record<string, unknown>;
+  }
+): Promise<SyncLinkRecord> {
+  const result = await prisma.syncLink.updateMany({
+    where: { id, version },
+    data: {
+      qboId: data.qboId,
+      qboSyncToken: data.qboSyncToken,
+      qboUpdatedAt: data.qboUpdatedAt,
+      lastSyncedSnapshot: JSON.parse(JSON.stringify(data.snapshot)),
+      lastSyncedAt: new Date(),
+      syncStatus: "SYNCED",
+      version: { increment: 1 },
+    },
+  });
+  if (result.count === 0) throw new ConflictError("Optimistic lock conflict on SyncLink in upsertLinked");
+  const updated = await prisma.syncLink.findUnique({ where: { id } });
+  return toDomain(updated!);
+}
+
+async function createNewSyncLink(data: {
+  internalId: string;
+  qboId: string;
+  qboSyncToken: string;
+  qboUpdatedAt: Date;
+  snapshot: Record<string, unknown>;
+}): Promise<SyncLinkRecord> {
+  const created = await prisma.syncLink.create({
+    data: {
+      internalId: data.internalId,
+      qboId: data.qboId,
+      qboSyncToken: data.qboSyncToken,
+      qboUpdatedAt: data.qboUpdatedAt,
+      internalUpdatedAt: new Date(),
+      lastSyncedSnapshot: JSON.parse(JSON.stringify(data.snapshot)),
+      lastSyncedAt: new Date(),
+      syncStatus: "SYNCED",
+    },
+  });
+  return toDomain(created);
+}
+
 export const syncLinkRepository: SyncLinkPort = {
   async findByInternalId(internalId: string): Promise<SyncLinkRecord | null> {
     const row = await prisma.syncLink.findUnique({ where: { internalId } });
@@ -127,46 +176,24 @@ export const syncLinkRepository: SyncLinkPort = {
     const existing = await prisma.syncLink.findUnique({ where: { internalId } });
     if (existing) {
       try {
-        const result = await prisma.syncLink.updateMany({
-          where: { id: existing.id, version },
-          data: {
-            qboId, qboSyncToken, qboUpdatedAt,
-            lastSyncedSnapshot: JSON.parse(JSON.stringify(snapshot)),
-            lastSyncedAt: new Date(),
-            syncStatus: "SYNCED",
-            version: { increment: 1 },
-          },
-        });
-        if (result.count === 0) {
-          throw new ConflictError("Optimistic lock conflict on SyncLink in upsertLinked");
-        }
+        return await updateExistingSyncLink(existing.id, version, { qboId, qboSyncToken, qboUpdatedAt, snapshot });
       } catch (err) {
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-          const existingByQboId = await prisma.syncLink.findUnique({ where: { qboId } });
-          if (existingByQboId) return toDomain(existingByQboId);
+          const byQboId = await prisma.syncLink.findUnique({ where: { qboId } });
+          if (byQboId) return toDomain(byQboId);
         }
         throw err;
       }
-      const updated = await prisma.syncLink.findUnique({ where: { id: existing.id } });
-      return toDomain(updated!);
     }
+
     try {
-      const created = await prisma.syncLink.create({
-        data: {
-          internalId, qboId, qboSyncToken, qboUpdatedAt,
-          internalUpdatedAt: new Date(),
-          lastSyncedSnapshot: JSON.parse(JSON.stringify(snapshot)),
-          lastSyncedAt: new Date(),
-          syncStatus: "SYNCED",
-        },
-      });
-      return toDomain(created);
+      return await createNewSyncLink({ internalId, qboId, qboSyncToken, qboUpdatedAt, snapshot });
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-        const existingByQboId = await prisma.syncLink.findUnique({ where: { qboId } });
-        if (existingByQboId) return toDomain(existingByQboId);
-        const existingByInternalId = await prisma.syncLink.findUnique({ where: { internalId } });
-        if (existingByInternalId) return toDomain(existingByInternalId);
+        const byQboId = await prisma.syncLink.findUnique({ where: { qboId } });
+        if (byQboId) return toDomain(byQboId);
+        const byInternalId = await prisma.syncLink.findUnique({ where: { internalId } });
+        if (byInternalId) return toDomain(byInternalId);
       }
       throw err;
     }

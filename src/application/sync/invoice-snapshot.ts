@@ -62,6 +62,16 @@ export function parseInvoiceSnapshot(snapshot: unknown): InvoiceSnapshot {
   return InvoiceSnapshotSchema.parse(snapshot);
 }
 
+export const normalizeLineItemsForComparison = (items: InvoiceLineItem[]): Array<Record<string, unknown>> =>
+  items.map(item => ({
+    description: item.description,
+    quantity: item.quantity,
+    unitPrice: MoneySchema.parse(item.unitPrice),
+    amount: MoneySchema.parse(item.amount),
+    ...(item.internalItemCode ? { internalItemCode: item.internalItemCode } : {}),
+    ...(item.internalAccountCode ? { internalAccountCode: item.internalAccountCode } : {}),
+  }));
+
 export function snapshotToInvoice(snapshot: unknown, base: Invoice): Invoice {
   const parsed = parseInvoiceSnapshot(snapshot);
   return {

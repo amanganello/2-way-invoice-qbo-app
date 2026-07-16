@@ -4,7 +4,7 @@ import { PrismaInvoiceRepository } from "@/infrastructure/database/invoice.repos
 import { syncLinkRepository } from "@/infrastructure/database/sync-link.repository.js";
 import { auditLogRepository } from "@/infrastructure/database/audit-log.repository.js";
 import { QBOInvoiceAdapter } from "@/infrastructure/qbo/qbo-invoice.adapter.js";
-import { prisma } from "@/infrastructure/database/prisma.js";
+import { eventLogRepository } from "@/infrastructure/database/event-log.repository.js";
 import logger from "@/infrastructure/logger/index.js";
 
 const invoiceRepo = new PrismaInvoiceRepository();
@@ -15,8 +15,8 @@ export async function pullProcessor(
 ): Promise<void> {
   const { qboId, eventType, eventId } = job.data;
 
-  const logEntry = await prisma.eventLog.findUnique({ where: { eventId } });
-  if (logEntry?.status === "PROCESSED") {
+  const status = await eventLogRepository.findStatus(eventId);
+  if (status === "PROCESSED") {
     logger.debug({ eventId }, "pullProcessor: event already processed — skipping");
     return;
   }
@@ -29,17 +29,9 @@ export async function pullProcessor(
       auditLogRepo: auditLogRepository,
     });
 
-    await prisma.eventLog.updateMany({
-      where: { eventId },
-      data: { status: "PROCESSED", processedAt: new Date() },
-    });
+    await eventLogRepository.markProcessed(eventId);
   } catch (err) {
-    // FAILED means the latest attempt failed, not terminal failure.
-    // BullMQ will retry this job, and webhook re-delivery may re-enqueue FAILED events.
-    await prisma.eventLog.updateMany({
-      where: { eventId },
-      data: { status: "FAILED" },
-    });
+    await eventLogRepository.markFailed(eventId);
     throw err;
   }
 }

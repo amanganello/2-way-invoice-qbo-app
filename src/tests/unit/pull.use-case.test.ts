@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { pullInvoice, type PullDeps } from "@/application/sync/pull.use-case.js";
-import { toCurrencyCode, toMoney, type Invoice, type QBOInvoiceResult } from "@/domain/invoices/invoice.types.js";
+import { toCurrencyCode, toMoney, type Invoice } from "@/domain/invoices/invoice.types.js";
+import type { QBOInvoiceResult } from "@/application/ports/qbo.ports.js";
 import type { SyncLinkRecord } from "@/application/ports/sync.ports.js";
 
 function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {
@@ -54,6 +55,7 @@ function makeDeps() {
       updateInvoice: vi.fn(async () => makeQBOResult()),
       voidInvoice: vi.fn(async () => makeQBOResult()),
       findByDocNumber: vi.fn(async () => null),
+      listInvoices: vi.fn(async () => []),
     },
     auditLogRepo: { create: vi.fn(async () => {}), findBySyncLinkId: vi.fn(async () => []) },
   } satisfies PullDeps;

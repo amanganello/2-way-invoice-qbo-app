@@ -1,4 +1,5 @@
-import type { Invoice, InvoiceRepository, SyncQueuePort } from "@/domain/invoices/invoice.types.js";
+import type { Invoice } from "@/domain/invoices/invoice.types.js";
+import type { InvoiceRepository, SyncQueuePort } from "@/application/ports/invoice.ports.js";
 import { NotFoundError } from "@/shared/errors/app-error.js";
 
 export type CreateInvoiceInput = Omit<Invoice, "id" | "createdAt" | "updatedAt">;
