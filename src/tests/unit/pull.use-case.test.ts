@@ -58,6 +58,7 @@ function makeDeps() {
       listInvoices: vi.fn(async () => []),
     },
     auditLogRepo: { create: vi.fn(async () => {}), findBySyncLinkId: vi.fn(async () => []) },
+    reconcileQueue: { enqueueReconcile: vi.fn(async () => {}) },
   } satisfies PullDeps;
 }
 
@@ -201,5 +202,47 @@ describe("pullInvoice", () => {
     expect(deps.syncLinkRepo.setStatus).not.toHaveBeenCalledWith(
       expect.anything(), expect.anything(), "CONFLICT", expect.anything()
     );
+  });
+
+  it("restores prevStatus (PENDING) on stale event instead of hardcoding SYNCED", async () => {
+    const deps = makeDeps();
+    // syncLink was PENDING before setProcessing
+    (deps.syncLinkRepo.findByQboId as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeSyncLink({ syncStatus: "PENDING", qboUpdatedAt: new Date("2026-12-01") }) // newer than QBO result
+    );
+    await pullInvoice("qbo-1", "Update", "evt-1", deps);
+    expect(deps.invoiceRepo.save).not.toHaveBeenCalled();
+    // Must restore PENDING, not set SYNCED
+    expect(deps.syncLinkRepo.setStatus).toHaveBeenCalledWith(
+      "sl-1", PROCESSING_VERSION, "PENDING", expect.anything()
+    );
+    expect(deps.syncLinkRepo.setStatus).not.toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), "SYNCED", expect.anything()
+    );
+  });
+
+  it("marks PENDING and enqueues reconcile after pull merge when prevStatus was PENDING", async () => {
+    const deps = makeDeps();
+    // prevStatus is PENDING — internal changes were queued
+    (deps.syncLinkRepo.findByQboId as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeSyncLink({ syncStatus: "PENDING" })
+    );
+    // QBO returns a fresh (non-stale) update
+    (deps.qboInvoicePort.getInvoice as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeQBOResult({ invoice: makeInvoice({ status: "paid" }) })
+    );
+    await pullInvoice("qbo-1", "Update", "evt-1", deps);
+    // Internal invoice must be saved (QBO changes applied)
+    expect(deps.invoiceRepo.save).toHaveBeenCalledOnce();
+    // Status must be PENDING (not SYNCED) — preserving the pending internal changes
+    expect(deps.syncLinkRepo.setStatus).toHaveBeenCalledWith(
+      "sl-1", PROCESSING_VERSION, "PENDING",
+      expect.objectContaining({ qboSyncToken: "2", qboUpdatedAt: expect.any(Date) })
+    );
+    // Snapshot must NOT be in the setStatus call (keep old snapshot for reconcile diff)
+    const setStatusCall = (deps.syncLinkRepo.setStatus as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(setStatusCall[3]).not.toHaveProperty("lastSyncedSnapshot");
+    // Reconcile must be re-queued
+    expect(deps.reconcileQueue.enqueueReconcile).toHaveBeenCalledWith("inv-1");
   });
 });
