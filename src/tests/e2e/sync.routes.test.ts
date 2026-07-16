@@ -43,16 +43,31 @@ describe("Sync routes", () => {
     vi.doMock("@/infrastructure/database/audit-log.repository", () => ({ auditLogRepository: mockAuditLogRepo }));
     vi.doMock("@/infrastructure/queue/queues", () => ({ invoiceSyncQueue: mockInvoiceSyncQueue, syncQueue: mockSyncQueue }));
     vi.doMock("@/infrastructure/queue/redis", () => ({ redisConnection: { ping: vi.fn(async () => "PONG") } }));
+    const mockQboInvoice = {
+      id: "inv-1", customerId: "cust-1", lineItems: [],
+      totalAmount: { amount: "100.00", currency: "USD" }, currency: "USD", status: "sent",
+      dueDate: new Date("2030-01-01"), createdAt: new Date("2026-01-01"), updatedAt: new Date("2026-01-01"),
+    };
+    const mockQboResult = {
+      qboId: "qbo-1", qboSyncToken: "10", qboUpdatedAt: new Date("2026-06-01"),
+      invoice: mockQboInvoice,
+    };
     vi.doMock("@/infrastructure/qbo/qbo-invoice.adapter", () => ({
       QBOInvoiceAdapter: class {
         listInvoices = vi.fn(async () => []);
-        getInvoice = vi.fn(); createInvoice = vi.fn(); updateInvoice = vi.fn();
+        getInvoice = vi.fn(async () => mockQboResult);
+        createInvoice = vi.fn(); updateInvoice = vi.fn();
         voidInvoice = vi.fn(); findByDocNumber = vi.fn();
       },
     }));
+    const mockInternalInvoice = {
+      id: "inv-1", customerId: "cust-1", lineItems: [],
+      totalAmount: { amount: "100.00", currency: "USD" }, currency: "USD", status: "sent",
+      dueDate: new Date("2030-01-01"), createdAt: new Date("2026-01-01"), updatedAt: new Date("2026-01-01"),
+    };
     vi.doMock("@/infrastructure/database/invoice.repository", () => ({
       PrismaInvoiceRepository: class {
-        findById = vi.fn(async () => null);
+        findById = vi.fn(async () => mockInternalInvoice);
         save = vi.fn(async (inv: unknown) => inv);
         findAll = vi.fn(async () => []);
       },
@@ -112,7 +127,12 @@ describe("Sync routes", () => {
       payload: JSON.stringify({ strategy: "accept-qbo" }),
     });
     expect(res.statusCode).toBe(200);
-    expect(mockSyncLinkRepo.setStatus).toHaveBeenCalledWith("sl-1", 0, "SYNCED", {});
+    expect(mockSyncLinkRepo.setStatus).toHaveBeenCalledWith("sl-1", 0, "SYNCED", expect.objectContaining({
+      qboSyncToken: "10",
+      qboUpdatedAt: expect.any(Date),
+      lastSyncedSnapshot: expect.any(Object),
+      lastSyncedAt: expect.any(Date),
+    }));
     expect(mockSyncQueue.enqueueReconcile).not.toHaveBeenCalled();
   });
 

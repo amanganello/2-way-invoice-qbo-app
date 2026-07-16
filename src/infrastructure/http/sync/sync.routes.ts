@@ -50,7 +50,16 @@ export async function registerSyncRoutes(app: FastifyInstance): Promise<void> {
   app.post("/sync/conflicts/:id/resolve", async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = SyncLinkParamsSchema.parse(request.params);
     const { strategy } = ResolveConflictSchema.parse(request.body);
-    return reply.send(await resolveConflict(deps, id, strategy));
+    return reply.send(await resolveConflict(
+      {
+        syncLinkRepo: deps.syncLinkRepo,
+        queue: deps.queue,
+        invoiceRepo: new PrismaInvoiceRepository(),
+        qboInvoicePort: new QBOInvoiceAdapter(),
+      },
+      id,
+      strategy
+    ));
   });
 
   app.post("/sync/initial-load/internal-to-qbo", async (request: FastifyRequest, reply: FastifyReply) => {
