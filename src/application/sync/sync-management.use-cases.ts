@@ -49,7 +49,10 @@ export async function listConflicts(
 }
 
 export async function resolveConflict(
-  deps: Pick<SyncManagementDeps, "syncLinkRepo" | "queue">,
+  deps: Pick<SyncManagementDeps, "syncLinkRepo" | "queue"> & {
+    invoiceRepo: InvoiceRepository;
+    qboInvoicePort: QBOInvoicePort;
+  },
   id: string,
   strategy: "accept-internal" | "accept-qbo"
 ) {
@@ -62,7 +65,24 @@ export async function resolveConflict(
     await deps.syncLinkRepo.setStatus(syncLink.id, syncLink.version, "PENDING", {});
     await deps.queue.enqueueReconcile(syncLink.internalId);
   } else {
-    await deps.syncLinkRepo.setStatus(syncLink.id, syncLink.version, "SYNCED", {});
+    // accept-qbo: fetch QBO's current state and apply it to internal,
+    // so both sides converge to QBO's version.
+    if (!syncLink.qboId) throw new NotFoundError(`SyncLink ${id} has no qboId`);
+    const internalInvoice = await deps.invoiceRepo.findById(syncLink.internalId);
+    if (!internalInvoice) throw new NotFoundError(`Internal invoice ${syncLink.internalId} not found`);
+    const qboResult = await deps.qboInvoicePort.getInvoice(syncLink.qboId);
+    await deps.invoiceRepo.save({
+      ...qboResult.invoice,
+      id: internalInvoice.id,
+      createdAt: internalInvoice.createdAt,
+      updatedAt: new Date(),
+    });
+    await deps.syncLinkRepo.setStatus(syncLink.id, syncLink.version, "SYNCED", {
+      qboSyncToken: qboResult.qboSyncToken,
+      qboUpdatedAt: qboResult.qboUpdatedAt,
+      lastSyncedSnapshot: invoiceToSnapshot(qboResult.invoice),
+      lastSyncedAt: new Date(),
+    });
   }
 
   return { ok: true, strategy, internalId: syncLink.internalId };
