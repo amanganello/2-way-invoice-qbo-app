@@ -100,7 +100,8 @@ export async function pullInvoice(
     // Refetch from QBO
     const qboResult = await qboInvoicePort.getInvoice(qboId);
 
-    // Stale event check
+    // Stale event check — nothing new in QBO, restore prevStatus unchanged.
+    // If prevStatus was PENDING, runSyncRecoveryScan will pick it up and enqueue reconcile.
     if (syncLink.qboUpdatedAt && qboResult.qboUpdatedAt <= syncLink.qboUpdatedAt) {
       await auditLogRepo.create({
         syncLinkId: syncLink.id, action: "skipped_stale", sourceEventId, result: "SUCCESS",
